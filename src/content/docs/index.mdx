@@ -1,0 +1,49 @@
+---
+title: tsurara
+description: Types and one call function per operation from OpenAPI, for TypeScript, Python, Rust and Go.
+template: splash
+hero:
+  tagline: Types and one call function per operation from OpenAPI 3.0, 3.1, 3.2 and Swagger 2.0. Calls return Results instead of throwing.
+  image:
+    file: ../../assets/logo.svg
+  actions:
+    - text: Get started
+      link: getting-started/
+      icon: right-arrow
+    - text: GitHub
+      link: https://github.com/tsurara-openapi/tsurara
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+import Samples from '../../components/Samples.astro';
+
+## One definition, one function per operation
+
+The same operation of a small definition, generated for each language by the current tsurara.
+
+<Samples definitionLabel="The definition" generatedLabel="Generated code" usageLabel="Your code" />
+
+## Features
+
+<CardGrid>
+  <Card title="Results instead of exceptions" icon="approve-check">
+    Every call returns a Result: the success data, a documented error body, an undocumented status, or a network failure. Each case has its type.
+  </Card>
+  <Card title="A single binary" icon="rocket">
+    The generator is written in Rust and needs no Node to generate. npm installs the binary for macOS, Linux or Windows (x64 and arm64).
+  </Card>
+  <Card title="Thin, strict output" icon="seti:typescript">
+    Generated code passes TypeScript's strictest options and is checked against real-world definitions in CI. Serialization lives in a small runtime library.
+  </Card>
+  <Card title="TanStack Query, Zod and mocks" icon="puzzle">
+    Optionally generates TanStack Query options, Zod schemas, and sample data with MSW handlers for UI development and tests.
+  </Card>
+  <Card title="TypeScript, Python, Rust and Go" icon="translate">
+    TypeScript and Python, with Rust and Go experimental. Backends for other languages can live in their own repositories.
+  </Card>
+  <Card title="For coding agents" icon="laptop">
+    An MCP server and a JSON CLI answer which function calls an endpoint and how to call it. [llms.txt](llms.txt) lists the documentation.
+  </Card>
+</CardGrid>

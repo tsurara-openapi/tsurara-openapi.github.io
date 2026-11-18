@@ -1,0 +1,49 @@
+---
+title: tsurara
+description: 根据 OpenAPI 定义，为 TypeScript、Python、Rust 和 Go 生成类型以及每个操作对应的调用函数。
+template: splash
+hero:
+  tagline: 根据 OpenAPI 3.0、3.1、3.2 和 Swagger 2.0 定义，生成类型以及每个操作对应的调用函数。调用不会抛出异常，而是返回 Result。
+  image:
+    file: ../../../assets/logo.svg
+  actions:
+    - text: 开始使用
+      link: getting-started/
+      icon: right-arrow
+    - text: GitHub
+      link: https://github.com/tsurara-openapi/tsurara
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+import Samples from '../../../components/Samples.astro';
+
+## 一份定义，每个操作一个函数
+
+下面是用最新版 tsurara 为各语言生成的同一个操作，来自一份小型定义。
+
+<Samples definitionLabel="定义" generatedLabel="生成的代码" usageLabel="调用方代码" />
+
+## 特性
+
+<CardGrid>
+  <Card title="返回 Result，而不是抛出异常" icon="approve-check">
+    每次调用都返回 Result：成功的数据、定义中声明的错误响应体、定义中未声明的状态码，或网络失败。每种情况都有对应的类型。
+  </Card>
+  <Card title="单个二进制文件" icon="rocket">
+    生成器用 Rust 编写，生成时不需要 Node。通过 npm 即可安装适用于 macOS、Linux 和 Windows（x64 与 arm64）的二进制文件。
+  </Card>
+  <Card title="轻量而严格的输出" icon="seti:typescript">
+    生成的代码可以通过 TypeScript 最严格的选项检查，并在 CI 中针对真实的 API 定义进行验证。序列化由一个小型运行时库负责。
+  </Card>
+  <Card title="TanStack Query、Zod 与 Mock" icon="puzzle">
+    还可以生成 TanStack Query 选项、Zod schema，以及示例数据和 MSW 处理器，便于在没有服务器的情况下开发 UI 和编写测试。
+  </Card>
+  <Card title="TypeScript、Python、Rust 和 Go" icon="translate">
+    支持 TypeScript 和 Python，Rust 和 Go 为实验性支持。其他语言的后端可以放在独立的仓库中。
+  </Card>
+  <Card title="面向编程智能体" icon="laptop">
+    MCP 服务器和 JSON 输出的 CLI 可以回答“哪个函数调用某个端点”以及“如何调用”。文档列表见 [llms.txt](../llms.txt)。
+  </Card>
+</CardGrid>

@@ -1,0 +1,111 @@
+---
+// One operation of samples/openapi.yaml, as generated for each language (`pnpm sync` writes
+// samples/out/ with the synced tsurara), and code that calls it.
+import { Code, TabItem, Tabs } from '@astrojs/starlight/components';
+import definition from '../../samples/openapi.yaml?raw';
+import go from '../../samples/out/go/get_pet_by_id_op_gen.go?raw';
+import python from '../../samples/out/python/operations/get_pet_by_id.py?raw';
+import rust from '../../samples/out/rust/operations/get_pet_by_id.rs?raw';
+import typescript from '../../samples/out/typescript/operations/getPetById.ts?raw';
+
+interface Props {
+  definitionLabel: string;
+  generatedLabel: string;
+  usageLabel: string;
+}
+const { definitionLabel, generatedLabel, usageLabel } = Astro.props;
+
+const languages = [
+  {
+    label: 'TypeScript',
+    lang: 'ts',
+    file: 'generated/operations/getPetById.ts',
+    generated: typescript,
+    usage: `import { createClient, isHttpError } from '@tsurara/client';
+import { getPetById } from './generated/index.js';
+
+const api = createClient({ baseUrl: 'https://api.example.com' });
+
+const result = await getPetById(api, { path: { petId: 1 } });
+if (result.ok) console.log(result.data.name);
+else if (isHttpError(result, 404)) console.log('no such pet');
+else console.log('failed:', result.kind);`,
+  },
+  {
+    label: 'Python',
+    lang: 'python',
+    file: 'api/operations/get_pet_by_id.py',
+    generated: python,
+    usage: `from tsurara_client import Client, HttpError, Success
+from api.operations import get_pet_by_id
+
+with Client("https://api.example.com") as client:
+    match get_pet_by_id(client, pet_id=1):
+        case Success(data=pet):
+            print(pet.name)
+        case HttpError(status=404, error=problem):
+            print(problem.message)`,
+  },
+  {
+    label: 'Rust',
+    lang: 'rust',
+    file: 'src/api/operations/get_pet_by_id.rs',
+    generated: rust,
+    usage: `use api::operations::get_pet_by_id;
+use tsurara_client::{Client, Failure};
+
+let client = Client::builder("https://api.example.com").build();
+match get_pet_by_id(&client, 1, Default::default()).await {
+    Ok(pet) => println!("{}", pet.data.name),
+    Err(Failure::Http { status: 404, .. }) => println!("no such pet"),
+    Err(other) => return Err(other.into()),
+}`,
+  },
+  {
+    label: 'Go',
+    lang: 'go',
+    file: 'petstore/get_pet_by_id_op_gen.go',
+    generated: go,
+    usage: `c := tsurara.NewClient("https://api.example.com")
+pet, err := petstore.GetPetByID(ctx, c, 1, nil)
+var failure *tsurara.Failure[petstore.Problem]
+switch {
+case err == nil:
+	fmt.Println(pet.Data.Name)
+case errors.As(err, &failure) && failure.Status == 404:
+	fmt.Println("no such pet")
+default:
+	return err
+}`,
+  },
+];
+---
+
+<details class="definition">
+  <summary>{definitionLabel}</summary>
+  <Code code={definition} lang="yaml" title="openapi.yaml" />
+</details>
+
+<Tabs syncKey="language">
+  {
+    languages.map((l) => (
+      <TabItem label={l.label}>
+        <p class="sample-label">{usageLabel}</p>
+        <Code code={l.usage} lang={l.lang} />
+        <p class="sample-label">{generatedLabel}</p>
+        <Code code={l.generated} lang={l.lang} title={l.file} />
+      </TabItem>
+    ))
+  }
+</Tabs>
+
+<style>
+  .sample-label {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+  }
+  .definition summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
+</style>

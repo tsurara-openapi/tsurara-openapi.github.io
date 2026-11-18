@@ -1,0 +1,22 @@
+{
+  "name": "tsurara-openapi.github.io",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "sync": "node scripts/sync-docs.mjs",
+    "translations": "node scripts/check-translations.mjs"
+  },
+  "dependencies": {
+    "@astrojs/markdown-satteri": "0.4.6",
+    "@astrojs/starlight": "0.42.9",
+    "astro": "7.4.5"
+  }
+}

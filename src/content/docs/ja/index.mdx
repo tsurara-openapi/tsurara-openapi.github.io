@@ -1,0 +1,49 @@
+---
+title: tsurara
+description: OpenAPIの定義から、型と操作ごとの呼び出し関数をTypeScript、Python、Rust、Go向けに生成します。
+template: splash
+hero:
+  tagline: OpenAPI 3.0、3.1、3.2とSwagger 2.0の定義から、型と操作ごとの呼び出し関数を生成します。呼び出しは例外を投げず、Resultを返します。
+  image:
+    file: ../../../assets/logo.svg
+  actions:
+    - text: はじめる
+      link: getting-started/
+      icon: right-arrow
+    - text: GitHub
+      link: https://github.com/tsurara-openapi/tsurara
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+import Samples from '../../../components/Samples.astro';
+
+## 1つの定義から、操作ごとに1つの関数
+
+小さな定義の同じ操作を、最新のtsuraraで各言語向けに生成した結果です。
+
+<Samples definitionLabel="定義" generatedLabel="生成されるコード" usageLabel="呼び出す側のコード" />
+
+## 特徴
+
+<CardGrid>
+  <Card title="例外ではなくResult" icon="approve-check">
+    呼び出しはすべてResultを返します。成功時のデータ、定義に書かれたエラーの本文、定義にないステータス、通信の失敗のどれなのかが型で区別されます。
+  </Card>
+  <Card title="単一のバイナリ" icon="rocket">
+    生成器はRustで書かれていて、生成にNodeは要りません。npmでmacOS、Linux、Windows（x64とarm64）向けのバイナリが入ります。
+  </Card>
+  <Card title="薄く厳格な出力" icon="seti:typescript">
+    生成コードはTypeScriptの最も厳しいオプションで型検査を通り、CIでは実在のAPI定義からの生成結果も検査しています。シリアライズは小さなランタイムライブラリが受け持ちます。
+  </Card>
+  <Card title="TanStack Query、Zod、モック" icon="puzzle">
+    TanStack Queryのオプション、Zodスキーマ、サンプルデータとMSWのハンドラーも生成できます。UIの開発やテストをサーバーなしで進められます。
+  </Card>
+  <Card title="TypeScript、Python、Rust、Go" icon="translate">
+    TypeScriptとPythonに対応し、RustとGoは実験的な対応です。ほかの言語のバックエンドは別のリポジトリで作れます。
+  </Card>
+  <Card title="コーディングエージェント向け" icon="laptop">
+    MCPサーバーとJSON出力のCLIが、どの関数がエンドポイントを呼ぶのか、どう呼ぶのかを答えます。ドキュメントの一覧は[llms.txt](../llms.txt)にあります。
+  </Card>
+</CardGrid>

@@ -1,0 +1,31 @@
+/* A cool blue accent, after the icicle (tsurara) of the name. */
+:root {
+  --sl-color-accent-low: #0b2a3a;
+  --sl-color-accent: #2b8fc0;
+  --sl-color-accent-high: #b9e6f8;
+}
+:root[data-theme='light'] {
+  --sl-color-accent-low: #d4effa;
+  --sl-color-accent: #1a7aab;
+  --sl-color-accent-high: #0d3a52;
+}
+
+/* System fonts per script: no web fonts to download, and the glyph forms of each language. */
+:root:lang(ja) {
+  --sl-font: ui-sans-serif, system-ui, -apple-system, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN',
+    'Noto Sans JP', 'Yu Gothic UI', Meiryo, sans-serif;
+}
+:root:lang(zh-CN) {
+  --sl-font: ui-sans-serif, system-ui, -apple-system, 'PingFang SC', 'Hiragino Sans GB',
+    'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+}
+:root:lang(ja) .sl-markdown-content,
+:root:lang(zh-CN) .sl-markdown-content {
+  line-height: 1.8;
+}
+
+/* Wide tables of the guides scroll instead of squeezing their columns. */
+.sl-markdown-content table {
+  display: block;
+  overflow-x: auto;
+}

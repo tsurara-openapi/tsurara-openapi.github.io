@@ -1,0 +1,19 @@
+# The samples on the home page. `pnpm sync` regenerates out/ with the synced tsurara.
+targets:
+  - name: typescript
+    input: ./openapi.yaml
+    output: ./out/typescript
+  - name: python
+    input: ./openapi.yaml
+    output: ./out/python
+    language: python
+  - name: rust
+    input: ./openapi.yaml
+    output: ./out/rust
+    language: rust
+  - name: go
+    input: ./openapi.yaml
+    output: ./out/go
+    language: go
+    go:
+      package: petstore

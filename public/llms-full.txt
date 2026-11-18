@@ -1,0 +1,2027 @@
+# tsurara
+
+> tsurara generates types and one call function per operation from OpenAPI 3.0, 3.1 and 3.2 (and Swagger 2.0) for TypeScript, Python, Rust and Go. The generator is a single binary; generated code calls a small runtime library per language and returns Results instead of throwing.
+
+
+<!-- README.md -->
+
+# tsurara
+
+tsurara generates types and one call function per operation from OpenAPI 3.0, 3.1, 3.2 and Swagger 2.0: TypeScript and Python, with Rust and Go experimental.
+Calls return Results instead of throwing, and it can also generate TanStack Query helpers, Zod schemas and mocks, with an MCP server and a JSON CLI for coding agents.
+It is a single binary that needs no Node to generate, and its thin output passes TypeScript's strictest options and is checked against real-world definitions in CI.
+
+## Quick start
+
+Requirements: Node 22.18 or later (to run the example below directly).
+
+1. Install the generator and the runtime library:
+
+   ```sh
+   npm install --save-dev tsurara
+   npm install @tsurara/client
+   ```
+
+   The `tsurara` package runs a native binary for macOS, Linux or Windows (x64 and arm64). Each [GitHub release](https://github.com/tsurara-openapi/tsurara/releases) also has the binaries as archives.
+
+2. Create `tsurara.config.yaml` (or run `npx tsurara init`):
+
+   ```yaml
+   input: https://petstore3.swagger.io/api/v3/openapi.json
+   output: src/generated
+   typescript:
+     importExtension: ts   # run directly with Node type stripping; use `js` (default) with tsc builds
+   ```
+
+3. Generate:
+
+   ```sh
+   npx tsurara generate
+   ```
+
+4. Call the API:
+
+   ```ts
+   // main.ts
+   import { createClient, isHttpError, unwrap } from '@tsurara/client';
+   import { getInventory, getPetById } from './src/generated/index.ts';
+
+   const api = createClient({ baseUrl: 'https://petstore3.swagger.io/api/v3' });
+
+   const inventory = unwrap(await getInventory(api)); // { [status: string]: number }
+   console.log(inventory);
+
+   const result = await getPetById(api, { path: { petId: 1 } });
+   if (result.ok) console.log(result.data);
+   else if (isHttpError(result, 404)) console.log('no such pet');
+   else console.log('failed:', result.kind);
+   ```
+
+   ```sh
+   node main.ts
+   ```
+
+## Documentation
+
+- TypeScript: [configuration](docs/guide/configuration.md), [types](docs/guide/types.md), [the client](docs/guide/client.md), [validation](docs/guide/validation.md), [React and TanStack Query](docs/guide/react.md), [mocks](docs/guide/mocks.md), [monorepos](docs/guide/monorepo.md), [migration](docs/guide/migration.md)
+- Other languages: [Python](docs/languages/python.md), [Rust](docs/languages/rust.md) (experimental), [Go](docs/languages/go.md) (experimental), [adding a language](docs/guide/backends.md)
+- Tools: [the CLI](docs/guide/cli.md), [coding agents](docs/guide/ai.md), [plugins](docs/guide/plugins.md)
+- Design: [docs/design.md](docs/design.md)
+
+## Contributing
+
+Issues are welcome; pull requests are not accepted. See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
+
+## License
+
+[MIT](LICENSE)
+
+<!-- docs/guide/ai.md -->
+
+# Coding agents
+
+Agents that write application code against a generated client need two answers again and again: which generated function calls an endpoint, and how to call it in this language. tsurara answers both from the definition and the code it generated, through a CLI that prints JSON and an MCP server.
+
+## The MCP server
+
+`tsurara mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio, in the same binary as the CLI. It reads `tsurara.config.yaml` from the directory it starts in.
+
+| Tool | Does |
+|---|---|
+| `list_targets` | The targets, their language, input and output |
+| `search_operations` | Operations whose id, method, path, summary or tags contain every word of `query` (`find pet by id` finds `getPetById`), with the generated function; `offset` and `limit` (default 50) page through large definitions |
+| `describe_operation` | Parameters, request body, responses, the generated function and types, the other values generated for the operation (TanStack Query options, keys and filters, mock handlers), and a call example in the target's language |
+| `describe_schema` | A schema's generated type, file and declaration |
+| `generate` | Runs `tsurara generate` for one target or all; writes only into the configured output directories |
+| `check` | Runs `tsurara check` |
+| `explain_warning` | What a warning code means and how to resolve it |
+
+The guides of the installed version are resources (`tsurara://docs/guide/configuration.md`, ...), so an agent reads documentation that matches the binary.
+
+### Claude Code
+
+```sh
+claude mcp add tsurara -- tsurara mcp
+```
+
+Or in `.mcp.json` at the repository root, shared with the team:
+
+```json
+{
+  "mcpServers": {
+    "tsurara": { "command": "tsurara", "args": ["mcp"] }
+  }
+}
+```
+
+This repository is also a Claude Code plugin (`.claude-plugin/plugin.json`) that registers the server.
+
+### Cursor and other clients
+
+Clients that read the same `mcpServers` format (Cursor's `.cursor/mcp.json`, Windsurf, VS Code with `"servers"` instead of `"mcpServers"`) take the entry above. Start the server in the directory with `tsurara.config.yaml`, or set the client's working directory to it.
+
+## The skill and project rules
+
+`skills/tsurara/SKILL.md` (with references per language) is an [Agent Skill](https://agentskills.io): the rules (never edit generated files, call the generated functions, handle Results, run `tsurara check`), how to find answers, and how to call operations in TypeScript, Python, Rust and Go. The Claude Code plugin of this repository includes it; other agents can read it from the repository. Every code block in the references is type-checked against generated code in CI.
+
+`tsurara init --agents` writes the same rules, briefly, into `AGENTS.md` (or `CLAUDE.md` when the project only has that), between `<!-- tsurara:start -->` and `<!-- tsurara:end -->`; running it again replaces that section.
+
+[llms.txt](../../llms.txt) indexes the documentation for language models, and [llms-full.txt](../../llms-full.txt) holds all of it in one file.
+
+## The CLI
+
+Every answer of the server is also a command, for agents that run shell commands instead of MCP tools:
+
+```sh
+tsurara inspect operations --search "find pet by id" --format json
+tsurara inspect operation getPetById --target web --format json
+tsurara inspect schema Pet --format json
+tsurara inspect warning unresolved-ref
+tsurara generate --format json
+tsurara check --format json
+```
+
+`--target` is required when the configuration has several targets. The JSON of `generate` and `check` follows [spec/cli-output.schema.json](../../spec/cli-output.schema.json).
+
+## Call examples
+
+`describe_operation` and `inspect operation` print a file that calls the generated function with sample values from the definition (its examples, defaults and constraints) and the definition's first server as the base URL, and handles the Result as the language does. It compiles next to the generated code:
+
+| Language | File | Note |
+|---|---|---|
+| TypeScript | `example.ts` at the output root | With `query: tanstack`, also `exampleQuery` (the same call through the query options) or `exampleMutation`, and where the other helpers fit |
+| Python | `example.py` in the package | Arguments that are not plain values are decoded with the package's `CODEC` |
+| Rust | `example.rs` next to `mod.rs` | Add `mod example;`; arguments are decoded with `serde_json` |
+| Go | `example.go` in the package | Values that are not constants are decoded from JSON |
+
+Request bodies that are not JSON (files, form fields) are left for the app to fill.
+
+<!-- docs/guide/backends.md -->
+
+# Writing a backend
+
+A backend generates code for one language. Backends that ship with tsurara live in its repository; a backend for another language can live in its own repository and run as a program that tsurara starts. This guide goes from an empty repository to a backend that passes `tsurara test-backend` and a runtime that passes the conformance vectors. You need only the `tsurara` binary.
+
+## 1. The program
+
+tsurara runs the backend's command twice, appending `describe` or `generate`. Both print one JSON object on stdout; `generate` reads one on stdin. Users select it with:
+
+```yaml
+input: openapi.yaml
+output: out
+language:
+  command: [node, path/to/backend.mjs]
+  options: { package: petstore }   # passed through as `options`
+```
+
+The command runs in the directory of the configuration file.
+
+`describe` prints what the program speaks:
+
+```json
+{
+  "protocol": 2,
+  "semVersions": [1],
+  "markers": {
+    "generated": "// Generated by my-backend. Do not edit.",
+    "version": { "file": "Api.kt", "prefix": "// Requires my-runtime " },
+    "sidecars": [".uid"]
+  }
+}
+```
+
+- `protocol`: 1 or 2 (2 lets `generate` return a manifest). `semVersions`: the model versions the program understands; tsurara stops with an error naming both versions when its model is not listed.
+- `markers.generated` is the first line of every file the backend writes. tsurara deletes stale files that start with it, and `tsurara check` reports edits to them. `version` (optional) is the line that records the runtime version the code needs, which `tsurara check` compares with the installed runtime. `sidecars` (optional) are extensions deleted together with a stale file.
+
+`generate` reads `{ "protocol", "semVersion", "model", "common", "options" }` and prints `{ "files": [{ "path", "contents" }], "warnings": [], "manifest": ... }`. Paths are relative to the output directory. `model` is the analyzed definition; its JSON Schema is `spec/sem-model.schema.json` and the request's is `spec/plugin-protocol.schema.json` (`tsurara spec <dir>` writes both). With protocol 2, `manifest` (optional) lists the names generated for each schema and operation, for `extend` hooks and plugins (see [Plugins](plugins.md#the-manifest)).
+
+## 2. Capabilities and names
+
+The model is close to OpenAPI: unions, `allOf`, inline objects, nullability. Most languages cannot express all of it, and names from a definition collide, hit keywords and need casing. tsurara solves both for its own backends, and gives the same to yours when `describe` asks for it:
+
+```json
+{
+  "lowering": {
+    "capabilities": {
+      "inlineRecords": false, "structuralUnions": false, "taggedUnions": true,
+      "intersections": false, "inheritance": "none", "literalTypes": false,
+      "enums": "any", "tuples": false, "strictDecoding": false,
+      "nullablePrimitives": true, "recursionByValue": false
+    }
+  },
+  "naming": {
+    "contexts": {
+      "type": { "case": "pascal", "reserved": ["Any", "String"], "reservedSuffix": "Model" },
+      "member": { "case": "camel", "reserved": ["class", "fun", "val"], "reservedSuffix": "_" },
+      "constant": { "case": "screamingSnake" },
+      "function": { "case": "camel" },
+      "file": { "case": "pascal", "ascii": true }
+    },
+    "initialisms": ["ID", "URL"]
+  }
+}
+```
+
+`generate` then also receives:
+
+- `lowered`: the model as declarations your language can write: records (with a `base` only when `inheritance` allows it), enums, tagged and untagged unions as declarations, and aliases. Inline objects, intersections and structural unions are gone when the capabilities say so: they become named declarations. Type expressions name declarations by index (`{ "named": { "decl": 3, "site": "received" } }`).
+- `names`: for each declaration of `lowered`, by index, its type `name`, its `file` (without extension) and its `members` (record fields or enum values, in order), and for each operation of the model its `function`. Names are unique where they must be: type names across the output, file names also ignoring case, members within their declaration.
+
+Per context of `naming`: `case` (`pascal`, `camel`, `snake`, `screamingSnake`, `kebab`, `preserve`), `digitPrefix` (before a name that would start with a digit; default `_`), `upperPrefix` (before a name that does not start with an upper-case letter, as Go needs; default none), `fallback` (for a name with no letters; default `value`), `ascii` (other characters become `u` and their code point), `reserved` and `reservedSuffix` (default `_`). A context without rules uses those of `type`. Rules beyond these need a backend in Rust, which uses the same crates as tsurara (`tsurara-lower`, `tsurara-naming`; see `examples/backend-rust`).
+
+Start from `examples/backend-typescript/backend.mjs`, a complete backend in one file.
+
+## 3. Testing
+
+```sh
+tsurara test-backend --backend 'node backend.mjs' --check 'node check.mjs'
+```
+
+generates every definition of tsurara's edge-case corpus (names that collide, reserved words, cycles, discriminators, inheritance, multipart, Swagger 2.0, ...) with your backend, and runs `--check` in each output directory, with `TSURARA_OUTPUT` and `TSURARA_DEFINITION` set. Use your language's compiler or linter as the check (`go vet ./...`, `kotlinc`, `dotnet build`). A failing definition is named, and its directory (definition, configuration and output) is kept for reproduction. `--definitions <dir>` adds your own definitions, or real-world ones; `--options` passes `options` as JSON; `--keep <dir>` keeps every output.
+
+Run it in CI with the `tsurara` version you support.
+
+## 4. The runtime
+
+Generated code stays small when serialization lives in a runtime library: generated functions pass a description of the operation (an OperationDef) and the runtime builds the request, sends it and reads the response into a result. tsurara's runtimes all implement the same contract, and yours should too:
+
+```sh
+tsurara spec ./spec
+```
+
+writes the contract of this tsurara version: `README.md` (OperationDefs, the result kinds, serialization, TypeDefs, mock transports), the JSON Schemas, and `conformance/`, the vectors your runtime's tests run (requests, responses, sequences, TypeDefs, mock routing; `conformance/README.md` describes the format). Split the runtime into a types layer (what declarations need: optional and nullable markers, union helpers) and a client layer, so that generated types work without the HTTP client.
+
+## 5. Versions
+
+- `semVersion` (the model), `manifestVersion` and the protocol change only incompatibly; compatible additions (new optional fields) keep them, so ignore fields you do not know. `spec/CHANGELOG.md` records every change.
+- List every model version you support in `semVersions`. When tsurara moves to a new one, it stops with an error naming both versions, so users know to upgrade your backend.
+
+## A repository layout
+
+```
+my-backend/
+  backend/          The program (any language)
+  runtime/          The runtime library, with tests that run spec/conformance
+  spec/             From `tsurara spec`, committed with the tsurara version it came from
+  .github/workflows/ci.yml
+```
+
+```yaml
+# .github/workflows/ci.yml
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@v5
+      - run: npm install --global tsurara@0.1.0   # the `tsurara` binary of the version you support
+      - run: tsurara test-backend --backend 'node backend/backend.mjs' --check 'node backend/check.mjs'
+      - run: npm test --prefix runtime
+```
+
+## Known backends
+
+| Language | Repository | Protocol | Model versions |
+|---|---|---|---|
+| TypeScript, Python, Rust, Go | Built in | — | — |
+
+Open a pull request to add yours.
+
+<!-- docs/guide/cli.md -->
+
+# The CLI
+
+| Command | |
+|---|---|
+| `tsurara generate [--config <path>] [--target <name>] [--strict]` | Generate and write the files of every target (`--strict`: warnings are errors) |
+| `tsurara check` | Exit with 1 when the generated files differ from what would be generated, or when the installed `@tsurara/client` does not match; for CI |
+| `tsurara init [--agents] [--preset react-query]` | Write a `tsurara.config.yaml` template (`--agents`: also the rules for coding agents in `AGENTS.md`; `--preset react-query`: query options, Zod schemas and MSW handlers for React with TanStack Query, and the packages to install) |
+| `tsurara mcp` | An MCP server for coding agents ([guide](ai.md)) |
+| `tsurara inspect operations` / `operation <id>` / `schema <name>` / `warning <code>` | Look up operations, the generated function and a call example, a schema's generated type, or what a warning means, without writing files |
+
+`generate` and `check` take `--format json` for scripts and coding agents ([spec/cli-output.schema.json](../../spec/cli-output.schema.json)); `inspect` takes `--format json|text` and `--target`.
+
+`generate` writes only the files whose content changed, and deletes stale files in the output directory that start with tsurara's generated-file marker.
+
+<!-- docs/guide/client.md -->
+
+# The client
+
+Generated functions take a client as their first argument. `@tsurara/client` (TypeScript) is described here; the Python runtime `tsurara-client` has the same model ([its README](../../runtimes/python/README.md)).
+
+```ts
+import { createClient, retry } from '@tsurara/client';
+
+export const api = createClient<{ requestId?: string }>({
+  baseUrl: 'https://api.example.com',
+  headers: async (info) => ({ 'x-request-id': info.context?.requestId }),
+  auth: (scheme) => (scheme.scheme === 'bearerAuth' ? getToken() : undefined),
+  middleware: [retry()],
+  timeout: 10_000,
+  onResult: (result, info) => metrics.count(info.operation.id, result.kind),
+  onUndocumentedStatus: (info) => console.warn('undocumented status', info.operation.id, info.status),
+});
+```
+
+## Results
+
+A call never rejects. It returns a Result:
+
+| `kind` | `ok` | When |
+|---|---|---|
+| `success` | `true` | A success status of the definition; `data` has its type |
+| `http` | `false` | An error status, or a status the definition does not document (`documented: false`, `error: unknown`) |
+| `network` | `false` | `fetch` failed (DNS, connection, CORS) |
+| `timeout` | `false` | `timeout` passed |
+| `aborted` | `false` | The caller's `signal` aborted |
+| `parse` | `false` | The body does not match the definition (Content-Type, JSON) |
+| `unexpected` | `false` | User code (middleware, hooks) threw, or the input cannot be sent |
+
+```ts
+const r = await getPet(api, { path: { petId: 1 } });
+if (r.ok) render(r.data);
+else if (isHttpError(r, 404)) showNotFound(r.error); // the documented 404 body
+else report(r);
+```
+
+Checking only `r.status === 404` does not narrow `r.error`, because the member for undocumented statuses has `status: number`; `isHttpError` also checks `documented`.
+
+Where exceptions are easier, `unwrap(r)` returns `data` or throws `ApiError` (with `kind`, `status`, `operationId` and the `result`). `ApiError<GetPetResult>` types `result` by the operation, for example as `TError` in TanStack Query.
+
+## Middleware
+
+`(req, next) => Promise<Response>`, outermost first. `req.operation` has the operation's `id`, `method`, path template and `tags`, for traces and logs. `retry()` retries network failures and 408, 429, 500, 502, 503, 504 for idempotent methods, honoring `Retry-After`.
+
+## Authentication
+
+Operations carry their security requirements. `auth(scheme, info)` returns the credential for a scheme; the client places it as the scheme says (header, query or cookie for API keys, `Authorization: Bearer` for bearer and OAuth tokens, `Authorization: Basic` for `user:password`). The generated `SecuritySchemeName` lists the names.
+
+Redirects are followed within the origin of the request only. A redirect to another origin is not followed: the call returns it as an `http` failure with the 3xx status, so that API keys and other headers never reach another host. In browsers, `fetch` follows redirects itself (it hides where a redirect goes), under the browser's CORS rules.
+
+## Per-app clients and binding
+
+Make one client per app (or per server request with its own `context`); clients are cheap. `bindClient(api, { getPet, listPets })` returns the functions with the client bound: `api.getPet({ path: { petId: 1 } })`.
+
+## Validation
+
+Responses are not validated unless you ask. With `typescript.validators: zod`, tsurara also generates Zod 4 schemas, and the client validates JSON bodies with them:
+
+```ts
+import { createClient, validateResponses } from '@tsurara/client';
+import { responseSchemas } from './generated/zod/operations.ts';
+
+const api = createClient({ baseUrl, validate: validateResponses(responseSchemas) });
+const r = await getPet(api, { path: { petId: 1 } });
+if (r.kind === 'validation') console.error(r.issues, r.value);
+```
+
+The client depends on no validation library: `validate` takes any function, and `validateResponses` any [Standard Schema](https://standardschema.dev) schemas (Zod, Valibot, ArkType, or your own). `validate: false` turns it off for one call. The schemas check types and the `uuid`, `email` and `date-time` formats, not string and number constraints.
+
+## Server-Sent Events
+
+A `text/event-stream` response is typed when its media type describes the events with `itemSchema` (OpenAPI 3.2) or `x-itemSchema` (the same schema as an extension, for 3.0 and 3.1 documents):
+
+```yaml
+content:
+  text/event-stream:
+    x-itemSchema:
+      type: object
+      required: [event, data]
+      properties:
+        event: { type: string }
+        data: { type: string }
+        id: { type: string }
+      oneOf:
+        - properties:
+            event: { const: note }
+            data:
+              type: string
+              contentMediaType: application/json
+              contentSchema: { $ref: "#/components/schemas/Note" }
+        - properties:
+            event: { const: closing }
+```
+
+The data of the result is then an async iterable of `StreamEvent` (`{ event: 'note'; data: Note; id?: string } | { event: 'closing'; data: string; id?: string }`), and the client has already parsed the JSON:
+
+```ts
+const result = await api.stream({ signal });
+if (result.ok) {
+  for await (const e of result.data) {
+    if (e.event === 'note') show(e.data); // Note
+  }
+}
+```
+
+- The stream can be read once. Leaving the loop closes the connection; so does aborting `signal`, which makes the loop throw the abort reason. The client's `timeout` ends when the response starts, so it does not cut a stream.
+- Events are parsed as browsers do: comments are skipped and an event without `data` is not handed over. `id` and `retry` are those of the event itself; reconnecting, with `Last-Event-ID` if the server supports it, is up to you.
+- Invalid JSON in an event throws from the loop. Events the definition does not list arrive with `data` as a string.
+- Without an item schema the data is a `ReadableStream<Uint8Array>`; `parseEventStream(result.data)` from `@tsurara/client` reads it as `{ event, data, id?, retry? }` with `data` as a string.
+
+## JSON Lines
+
+An `application/jsonl` (or `application/x-ndjson`, `application/json-seq`) response with `itemSchema` (OpenAPI 3.2) or `x-itemSchema` is an async iterable of the item type, `{Operation}Item`, parsed item by item:
+
+```ts
+const result = await api.exportItems();
+if (result.ok) {
+  for await (const item of result.data) save(item); // ExportItemsItem
+}
+```
+
+As with events, the stream can be read once, leaving the loop closes the connection, and an item that is not valid JSON throws from the loop.
+
+## Event channels
+
+Messages a server pushes outside any operation, such as Mercure hub updates, are described with `x-event-channels` in the definition. Each channel gets `channels/{name}.ts` with the message type, a topic builder and a decoder:
+
+```ts
+import { validateChannels } from '@tsurara/client';
+import { boardTopic, decodeBoard } from './generated/channels/board.ts';
+import { channelSchemas } from './generated/zod/channels.ts'; // with `typescript.validators: zod`
+
+const url = new URL(hubUrl);
+url.searchParams.append('topic', topicPrefix + boardTopic({ boardId }));
+const source = new EventSource(url, { withCredentials: true });
+const validate = validateChannels(channelSchemas); // optional
+source.onmessage = (e) => {
+  const r = decodeBoard(e.data, { validate });
+  if (!r.ok) return resync(); // r.kind is 'parse' or 'validation'
+  switch (r.value.type) {
+    case 'card.added':
+      addCard(r.value.card);
+      break;
+    // ...
+  }
+};
+```
+
+The event kind is a property of the JSON payload, so messages arrive on `onmessage` without named SSE events.
+
+## TanStack Query
+
+With `typescript.query: tanstack` ([configuration](configuration.md)), every operation gets options for TanStack Query 5 under `query/`. Reads get a query key factory and query options; other operations get mutation options. Calls `unwrap`, so failures are thrown as `ApiError<{P}Result>`.
+
+```ts
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { getBoardQueryFilter, getBoardQueryKey, getBoardQueryOptions } from './generated/query/getBoard.ts';
+import { moveCardMutationOptions } from './generated/query/moveCard.ts';
+
+const board = useQuery(getBoardQueryOptions(api, { path: { boardId } })); // board.data: Board | undefined
+const qc = useQueryClient();
+const move = useMutation({
+  ...moveCardMutationOptions(api),
+  onMutate: async (input) => {
+    const key = getBoardQueryKey({ path: { boardId } });
+    await qc.cancelQueries({ queryKey: key });
+    qc.setQueryData(key, (old) => old && applyMove(old, input)); // `old` is Board | undefined
+  },
+});
+qc.invalidateQueries(getBoardQueryFilter()); // every getBoard query
+```
+
+Keys are `[operationId, data]` (after `{ scope }` for a client with a `queryScope`, below), so they can be built anywhere with the generated `…QueryKey` function, for example when a server-sent event patches the cache. The factories are typed with `@tanstack/query-core`, so they also work with the Vue, Solid and Svelte adapters.
+
+The options are plain objects; spread them to add TanStack's own options, and the types follow as with options written by hand:
+
+```ts
+import { skipToken, useQueries, useQuery } from '@tanstack/react-query';
+
+const name = useQuery({ ...getBoardQueryOptions(api, { path: { boardId } }), select: (b) => b.name }); // string | undefined
+const seeded = useQuery({ ...getBoardQueryOptions(api, { path: { boardId } }), initialData: board }); // Board
+const later = useQuery(getBoardQueryOptions(api, boardId === undefined ? skipToken : { path: { boardId } }));
+const many = useQueries({ queries: ids.map((boardId) => getBoardQueryOptions(api, { path: { boardId } })) });
+// In a router loader: the same options, the data typed as Board.
+const loaded = await queryClient.ensureQueryData(getBoardQueryOptions(api, { path: { boardId } }));
+```
+
+In `useMutation({ ...moveCardMutationOptions(api), onMutate, onError })`, the value `onMutate` returns is the typed `context` of `onError`, for rolling back an optimistic update.
+
+### Infinite queries
+
+OpenAPI does not say how a list is paginated, so write it down, on the operation in the definition or in the configuration (which wins):
+
+```yaml
+# In the definition, on the operation:
+x-tsurara-pagination: { param: query.cursor, next: /nextCursor }
+# Or in tsurara.config.yaml:
+typescript:
+  query: tanstack
+  infiniteQueries:
+    listOrders: { param: query.page, initial: 1, next: /meta/next, previous: /meta/prev }
+```
+
+The read then also gets infinite query options, whose key never equals the plain query's key:
+
+```ts
+const pets = useInfiniteQuery(listPetsInfiniteQueryOptions(api, { query: { limit: 20 } }));
+pets.data?.pages.flatMap((page) => page.items); // typed pages
+void pets.fetchNextPage(); // sends cursor = the previous page's nextCursor; stops when it is absent or null
+
+// Without `next` in the pagination, say where the next page is:
+useInfiniteQuery({
+  ...listEventsInfiniteQueryOptions(api),
+  getNextPageParam: (last, pages) => (last.length === 0 ? undefined : pages.length * 50),
+});
+```
+
+`invalidateQueries(listPetsQueryFilter())` matches the infinite query too.
+
+### Scopes: tenants, several APIs, logout
+
+The key does not contain the base URL or the credentials. When clients for different tenants or servers share one `QueryClient`, give each a `queryScope`, a JSON value that says who may share results (never a token). It goes first in the keys of the generated options:
+
+```ts
+import { createClient, queryScopeFilter } from '@tsurara/client';
+
+const scope = { tenant: tenantId };
+const api = createClient({ baseUrl, queryScope: scope });
+
+const update = useMutation({
+  ...updateCardMutationOptions(api),
+  onSuccess: async (card) => {
+    qc.setQueryData(getCardQueryKey({ path: { cardId: card.id } }, scope), card);
+    await qc.invalidateQueries(listCardsQueryFilter(scope)); // every listCards query of the tenant
+  },
+});
+
+// Logout or a tenant switch: drop everything the scope cached.
+qc.removeQueries(queryScopeFilter(scope));
+```
+
+Key factories and filters take the scope as their last argument (leave it out for a client without one). To patch every cached query of an operation, use the generated `set{Function}QueriesData(queryClient, updater, scope?)`, which types the updater (TanStack's `setQueriesData` does not infer the data from a filter) and leaves the operation's infinite queries alone; `get{Function}QueriesData` reads them:
+
+```ts
+setGetCardQueriesData(queryClient, (old) => old && { ...old, done: true }, scope); // old: Card | undefined
+```
+
+### Errors and retries
+
+The options throw `ApiError<{P}Result>`, which keeps the whole Result, so a component can tell failures apart with the same helpers as a call:
+
+```ts
+import { ApiError, isHttpError, queryRetry } from '@tsurara/client';
+import { QueryCache, QueryClient } from '@tanstack/react-query';
+
+const update = useMutation(updateCardMutationOptions(api));
+if (update.error && isHttpError(update.error.result, 422)) {
+  showFieldErrors(update.error.result.error.fields); // the documented 422 body
+}
+const card = useQuery(getCardQueryOptions(api, { path: { cardId } }));
+if (card.error && isHttpError(card.error.result, 401)) signIn();
+if (card.error?.kind === 'network') offerRetry();
+
+export const queryClient = new QueryClient({
+  // Retry like the retry() middleware: network failures and 408, 429, 500, 502, 503, 504, twice.
+  defaultOptions: { queries: { retry: queryRetry() } },
+  // Statuses the definition does not document point at drift between server and definition.
+  queryCache: new QueryCache({
+    onError: (e) => {
+      if (e instanceof ApiError && e.result.kind === 'http' && !e.result.documented) report(e);
+    },
+  }),
+});
+```
+
+Retry in one place. TanStack Query retries a failed query three times by default, documented 4xx errors included, and the `retry()` middleware retries inside each attempt, so with TanStack's default and the middleware a failing server is called up to 3 × 4 times. `queryRetry()` does not retry a failure the middleware already retried, so with `queryRetry()` and `retry()` together a request is sent at most as often as the middleware allows; still, configure one. For apps that read through TanStack Query, use `queryRetry()` as its `retry` and leave `retry()` out of the client: TanStack then knows about each attempt (`failureCount`, pausing while offline), and errors that cannot get better on their own (404, 422, a body that does not parse or validate) fail at once. Keep `retry()` for calls made without TanStack Query, with `retry: false` in the queries that use such a client. Mutations are not retried by TanStack by default, and `retry()` only retries idempotent methods. A cancelled query (the component unmounted, `cancelQueries`) ends as cancelled, not with an error.
+
+## Per-call options
+
+`signal`, `headers`, `timeout`, `baseUrl`, `context`, `validate`, and `contentType` (for operations with several request media types) can be given per call.
+
+## A vendored runtime
+
+Generated code needs the runtime package of its language. Where adding one is not possible (a restricted dependency policy, offline builds, an engine that ships dependencies as assets), `runtime: vendor` writes a copy of the runtime into the output instead:
+
+```yaml
+input: openapi.yaml
+output: src/api
+runtime: vendor
+```
+
+| Language | The copy | Notes |
+|---|---|---|
+| TypeScript | `_runtime/` | Generated files import it relatively; import `createClient` from `./api/_runtime/index.js` |
+| Python | `_runtime/` | `from api._runtime import Client`. Add httpx to your dependencies |
+| Rust | `runtime/` | Set `rust.runtimeCrate` to the module's path (`crate::api::runtime`), and add the crates `mod.rs` lists (serde, serde_json, indexmap; with operations also tokio, fastrand, httpdate and reqwest) |
+| Go | `internal/tsurara/` | The import path comes from your `go.mod` |
+
+The copy is regenerated with the code: it carries the generated-file marker, `tsurara check` reports edits to it, and it always matches the generator's version (there is no runtime version to check). `generate` prints the third-party dependencies to add.
+
+Prefer the package when you can: it is shared by several targets and updated on its own, while each target with `runtime: vendor` gets its own copy. With `operations: false`, Rust copies only the types layer, and TypeScript copies nothing (its types import no runtime).
+
+<!-- docs/guide/configuration.md -->
+
+# Configuration
+
+tsurara reads `tsurara.config.yaml` (or `.yml`, `.json`, `.toml`) from the current directory or the nearest parent, or the file given with `--config`. The npm package `tsurara` includes `schema/tsurara.config.schema.json`, which describes every key for editor completion:
+
+```yaml
+# yaml-language-server: $schema=./node_modules/tsurara/schema/tsurara.config.schema.json
+```
+
+## A target
+
+The top level is one target, unless there is `targets`.
+
+```yaml
+input: ./openapi.yaml            # a path relative to this file, or a URL
+output: ./src/generated          # relative to this file
+language: typescript             # typescript (default) or python
+```
+
+| Key | Default | |
+|---|---|---|
+| `name` | `default` | Name of the target, for `tsurara generate --target`. Required when there are several targets |
+| `input` | required | The definition: a path relative to this file, or a URL. Or an object: `url`, and `headers` sent only to that URL's origin (`Authorization: "Bearer ${TOKEN}"`) |
+| `output` | required | The output directory. tsurara writes only changed files and deletes stale files that start with its generated-file marker |
+| `language` | `typescript` | `typescript`, `python`, `rust` (experimental), `go` (experimental), or a backend program: `{ command: [program, args...], options: {...} }` |
+| `filter` | | `tags` and `operationIds`: only these operations. `excludeTags` and `excludeOperationIds`: all but these, also among the included ones. With any of them, only the schemas the remaining operations use are emitted, and webhooks are left out |
+| `naming.overrides` | | Preferred names per JSON Pointer, for every language: `"#/components/schemas/Error": ApiError`. Each language's naming rules still apply |
+| `splitVisibility` | `true` | Emit `XWritable` types (TypeScript) for schemas with `readOnly`/`writeOnly`: the plain type for responses, the writable one for requests |
+| `wildcardAsJson` | `false` | Treat wildcard media types (`*/*`, `application/*`) as JSON, for APIs that only answer JSON. By default they are parsed by the actual Content-Type |
+| `operations` | `true` | Generate the operations. With `false`, only the types of the schemas, webhooks and channels are emitted, and the output needs only the types layer of the runtime (no HTTP client; see [Types without the client](types.md#types-without-the-client)) |
+| `runtime` | `package` | Where generated code finds its runtime: `package` (`@tsurara/client`, `tsurara-client`, ...) or `vendor`, a copy of the runtime written into the output (see [A vendored runtime](client.md#a-vendored-runtime)) |
+| `hooks` | | Commands run at stages of generation (below) |
+| `typescript` | | Options of the TypeScript backend (below); only with `language: typescript` |
+| `python` | | Options of the Python backend (below); only with `language: python` |
+| `rust` | | Options of the Rust backend (below); only with `language: rust` |
+| `go` | | Options of the Go backend (below); only with `language: go` |
+| `extends` | | One file or a list: their settings are the defaults of this file (below) |
+
+Writing the section of another language (`python:` with `language: typescript`) is an error.
+
+## TypeScript options
+
+```yaml
+typescript:
+  importExtension: ts
+  layout: split
+  enumStyle: union
+  typeMappings:
+    uuid: { type: "Brand<'Uuid'>", import: { from: ./brand.ts, name: Brand } }
+  overrides:
+    "#/components/schemas/Id": string
+  naming:
+    schemaCase: preserve
+    overrides:
+      "#/components/schemas/Error": ApiErrorBody
+```
+
+| Key | Default | |
+|---|---|---|
+| `importExtension` | `js` | Extension of relative imports in generated code: `js` (for `tsc` builds and bundlers), `ts` (to run with Node type stripping; consumers need `allowImportingTsExtensions` or `rewriteRelativeImportExtensions`), or `none` (Metro, some bundlers) |
+| `layout` | `split` | `split`: one file per operation (`operations/getPet.ts`) and per schema (`schemas/Pet.ts`); `tags`: one file per tag; `single`: one file |
+| `enumStyle` | `union` | `union`: string literal unions; `const`: also an object keyed by the values (`Status.available`), with the type derived from it |
+| `aggregateMaps` | `false` | Also emit `paths.ts` and `operations.ts`, maps of every operation for generic clients |
+| `clientModule` | `@tsurara/client` | The module generated code imports the runtime from |
+| `mocks` | | `msw` or `fetch`: also emit mock factories (`mockPet()`, from the sample values of the definition) and one request handler per operation under `mocks/`, as MSW handlers or as routes for `mockFetch` of `@tsurara/client/testing` ([Mocks](mocks.md)). Nothing else imports them, and without the option nothing mentions `msw` |
+| `query` | | `tanstack`: also emit TanStack Query 5 options under `query/`: per read (`GET`, `HEAD`, `QUERY`) a typed query key factory and query options, per other operation mutation options ([The client](client.md#tanstack-query)). Nothing else imports them, and without the option nothing mentions `@tanstack` |
+| `infiniteQueries` | | Pagination per operation id for infinite query options (with `query: tanstack`): `param` (the parameter that carries the page, `query.cursor`), `initial` (the first page; default: left out), `next` and `previous` (JSON Pointers into a success body, `/nextCursor`; absent or `null` ends the query; without `next` the app gives `getNextPageParam`). Wins over `x-tsurara-pagination` on the operation in the definition, which takes the same fields. |
+| `validators` | | `zod`: also emit Zod 4 schemas under `zod/` and `zod/operations.ts` with `responseSchemas`, for response validation with `validateResponses` ([The client](client.md#validation)). Without it nothing mentions `zod` |
+| `validatorConstraints` | `false` | With `validators: zod`, also check the definition's constraints (`minLength`, `maxLength`, `pattern`, `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`, `multipleOf`, `minItems`, `maxItems`, `uniqueItems`, `minProperties`, `maxProperties`) and the formats `uri`, `ipv4`, `ipv6`, `date`, `time` and `duration`. Off by default: response validation would reject values that break them. A `pattern` that is not a JavaScript regular expression is left out with a warning |
+| `typeMappings` | | A type per `format` (`uuid`, `date`, ...): a type expression, or `{ type, import: { from, name } }`. Paths in `from` that start with `.` are relative to this file. A mapping must not change what JSON parsing produces: `Date` for `date-time` and `bigint` for `int64` are errors |
+| `overrides` | | A type per JSON Pointer, in the same form as `typeMappings` |
+| `naming.schemaCase` | `preserve` | `preserve` keeps component names that are identifiers; `pascal` makes every type name PascalCase |
+| `naming.overrides` | | Final TypeScript identifiers per JSON Pointer, used as they are |
+
+Types in `typeMappings`, `overrides` and `x-tsurara-type` must be type expressions (names, type arguments, arrays, `|`, `&`, literals); anything else is an error in the configuration and ignored with a warning in a definition.
+
+## Python options
+
+| Key | Default | |
+|---|---|---|
+| `strictEnums` | `false` | Enums and discriminators reject values the definition does not list. By default they keep them where values are received (`Status | str`) |
+| `mocks` | `false` | Also emit `mocks/`: `mock_{name}()` factories from the sample values and per operation a route for `MockRouter` of `tsurara_client.testing` ([Python](../languages/python.md#mocks)) |
+
+## Rust options
+
+The Rust backend is experimental ([docs/languages/rust.md](../languages/rust.md)).
+
+| Key | Default | |
+|---|---|---|
+| `runtimeCrate` | `tsurara_client` | The path generated code uses for the runtime crate. Required with `runtime: vendor`: the path of the generated module `runtime` in your crate (`crate::api::runtime`) |
+| `mocks` | `false` | Also emit the module `mocks` (compiled for tests and with a crate feature `mocks` that enables `tsurara-client/testing`): factories and routes for `MockTransport` ([Rust](../languages/rust.md#mocks)) |
+| `typeMappings` | | Types per `format`, as type paths: `date-time: chrono::DateTime<chrono::Utc>` |
+| `overrides` | | Types per JSON Pointer: `"#/components/schemas/Id": uuid::Uuid` |
+
+## Go options
+
+The Go backend is experimental ([docs/languages/go.md](../languages/go.md)). It writes one package into `output`.
+
+```yaml
+language: go
+go:
+  package: petstore
+```
+
+| Key | Default | |
+|---|---|---|
+| `package` | The output directory's name | The package name of the generated files; the directory name is lower-cased without other characters (`pet-store` → `petstore`), with `api` appended to a Go keyword (`go` → `goapi`), or `api` |
+| `runtimeModule` | `github.com/tsurara-openapi/tsurara/runtimes/go` | The import path of the runtime module (`runtimes/go`). With `runtime: vendor`, the import path of `internal/tsurara` in the output, computed from the nearest `go.mod` |
+| `mocks` | `false` | Also emit `mocks_gen.go`, built with the tag `tsurara_mocks`: `Mock{Type}()` factories and routes for `tsuraratest` ([Go](../languages/go.md#mocks)) |
+| `typeMappings` | | Types per `format`, with the import path of their package: `date-time: { type: time.Time, import: { from: time } }` |
+| `overrides` | | Types per JSON Pointer: `"#/components/schemas/Id": int64` |
+
+## Targets
+
+```yaml
+extends: ../../tsurara.base.yaml
+typescript:
+  importExtension: ts           # the default of every target below
+targets:
+  - name: public
+    input: https://api.example.com/openapi.json
+    output: src/generated/public
+  - name: admin
+    input: ./admin.yaml
+    output: src/generated/admin
+    filter: { tags: [users] }
+```
+
+Keys at the top level are the defaults of every entry of `targets`. Each target needs a unique `name`.
+
+## extends
+
+`extends` takes one file or a list. Objects are merged deeply, and arrays and other values are replaced; the file that extends wins. Every file is read and checked on its own first, so a relative path stays relative to the file it is written in, and hooks run in the directory of their file.
+
+## Plugins
+
+```yaml
+plugins:
+  - ./tsurara.plugin.ts                         # run with Node through @tsurara/plugin
+  - { module: ./other.py, runtime: [python, -m, tsurara_plugin] }
+```
+
+Each module runs once per `tsurara generate` and takes part in the stages it declares (design.md 11.2, [Plugins](plugins.md#plugins-in-typescript)). Paths are relative to the file they are written in.
+
+## Environment variables
+
+`${VAR}` in any string is replaced with the environment variable, so tokens stay out of the file. An unset variable is an error.
+
+## Hooks
+
+Hooks and plugins are commands that `tsurara generate` runs (and `generate` of the MCP server, for coding agents), with your permissions. A configuration file is code: generate only with configurations you trust, as you would run only scripts you trust. The paths of the files that hooks and plugins return must stay inside the output directory (relative, no `..`); tsurara refuses others.
+
+| Hook | Runs | Input and output |
+|---|---|---|
+| `transformDocument` | Before analysis | The root definition as JSON on stdin; the transformed definition on stdout |
+| `transformModel` | After analysis | The model as JSON (versioned by `semVersion`) on stdin and stdout |
+| `extend` | After generating | `{ language, model, manifest, common, marker }` as JSON on stdin; files to add (`[{ path, contents }]`) on stdout, each starting with `marker` ([plugins](plugins.md)) |
+| `transformFiles` | Before writing | The output files (`path`, `contents`) as JSON on stdin and stdout |
+| `afterWrite` | After writing | A list of commands; `{output}` is replaced with the output directory |
+
+```yaml
+hooks:
+  transformDocument: [node, scripts/patch-openapi.mjs]
+  afterWrite:
+    - [biome, format, --write, "{output}"]
+```
+
+A hook is a command as a list (`[program, args...]`). A failing hook stops generation.
+
+## Extension fields in definitions
+
+| Field | |
+|---|---|
+| `x-tsurara-type` | A type per language for a schema: `{ typescript: "Brand<'Uuid'>", python: UUID }`, or with an import: `{ typescript: { type: Uuid, import: { from: ./ids.ts, name: Uuid } } }` |
+
+<!-- docs/guide/migration.md -->
+
+# Migration
+
+## From openapi-typescript and openapi-fetch
+
+openapi-typescript generates one `paths` type, and openapi-fetch calls it by path: `client.GET('/pets/{petId}', { params: { path: { petId: 1 } } })`. tsurara generates a function per operation instead.
+
+| openapi-fetch | tsurara |
+|---|---|
+| `createClient<paths>({ baseUrl })` | `createClient({ baseUrl })` |
+| `client.GET('/pets/{petId}', { params: { path: { petId } } })` | `getPet(api, { path: { petId } })` |
+| `params.query`, `params.header`, `params.cookie`, `body` | `query`, `headers`, `cookies`, `body` |
+| `{ data, error, response }` | A Result: `r.ok ? r.data : r.kind === 'http' ? r.error : ...`; transport failures are results too, not rejections |
+| `components['schemas']['Pet']` | `Pet` (one export per schema) |
+| `paths['/pets']['get']['responses'][200]['content']['application/json']` | `ListPetsResponses[200]`, or `SuccessData<ListPetsResult>` |
+| Middleware `onRequest` / `onResponse` | Middleware `(req, next) => ...` |
+
+If you need the path-keyed form for generic code, `typescript.aggregateMaps: true` also emits `paths.ts` and `operations.ts`.
+
+## From hey-api
+
+hey-api (`@hey-api/openapi-ts`) also generates per-operation functions (`getPet({ path: { petId } })`) with a client plugin.
+
+| hey-api | tsurara |
+|---|---|
+| `openapi-ts.config.ts`, plugins | `tsurara.config.yaml`: TypeScript output and the runtime are built in; hooks for the rest |
+| `client.setConfig({ baseUrl })`, a global client | `createClient(...)` passed to each call; several clients can coexist |
+| `getPet({ client, path })` | `getPet(api, { path })`, or `bindClient(api, { getPet })` |
+| `{ data, error }` (or `throwOnError`) | Results, or `unwrap` that throws `ApiError` |
+| `GetPetData`, `GetPetResponses`, `GetPetErrors` | The same names |
+| `types.gen.ts` in one file | `layout: single` for one file; `split` (default) for one file per operation and schema |
+
+## Things that change
+
+- Calls do not reject: handle `r.ok` and `r.kind`, or use `unwrap`.
+- Enums are unions by default (`enumStyle: const` for objects).
+- `readOnly`/`writeOnly` schemas get a `Writable` variant for requests.
+- Dates stay strings (JSON has none); map formats to branded types with `typeMappings` if you want them distinct.
+
+<!-- docs/guide/mocks.md -->
+
+# Mocks
+
+`typescript.mocks` generates sample data and request handlers, so that UI development, Storybook and tests run without a server. The values come from the definition (its examples, defaults, enums, formats and constraints) and are the same on every run.
+
+```yaml
+typescript:
+  mocks: msw     # MSW request handlers; or `fetch` for mockFetch of @tsurara/client/testing
+```
+
+Everything is under `mocks/`, which nothing else imports, so production code never loads `msw`.
+
+## Factories
+
+`mocks/schemas/{Name}.ts` has `mock{Name}()` for every schema. Objects take overrides:
+
+```ts
+import { mockPet } from './generated/mocks/schemas/Pet.ts';
+
+const pet = mockPet({ name: 'Tama' }); // a Pet with the sample values, `name` replaced
+```
+
+A schema used inside another is built by its own factory (`owner: mockOwner()`), so a value is defined once. Types that the samples cannot follow exactly (discriminators whose mappings disagree with the members, `allOf`, external types) are asserted to their type.
+
+## Handlers
+
+`mocks/operations/{function}.ts` has a handler per operation. Without arguments it answers with the first documented success and the samples; the argument is a response the definition documents, or a function of the request that returns one:
+
+```ts
+import { setupServer } from 'msw/node';
+import { handlers } from './generated/mocks/index.ts';
+import { getPetByIdHandler } from './generated/mocks/operations/getPetById.ts';
+
+const server = setupServer(...handlers);
+server.use(getPetByIdHandler({ status: 404, body: { message: 'gone' } }));
+server.use(getPetByIdHandler(({ params }) => ({ status: 200, body: mockPet({ id: Number(params.petId) }) })));
+```
+
+`{Op}MockResponse` lists the documented statuses with their body types, so an undocumented status or a body of the wrong type is a type error. Paths become MSW paths (`*/pets/:petId`; `options.baseUrl` replaces `*`); a parameter inside a segment (`/files/{name}.{ext}`) is matched with a RegExp, without named parameters. Bodies are written as their media type: JSON, text, or bytes for binary and streamed responses.
+
+## Without MSW
+
+With `mocks: fetch`, the same functions return routes for `mockFetch` of `@tsurara/client/testing`, and `mocks/index.ts` exports `routes`:
+
+```ts
+import { createClient } from '@tsurara/client';
+import { mockFetch } from '@tsurara/client/testing';
+import { routes } from './generated/mocks/index.ts';
+
+const mock = mockFetch(routes, { basePath: '/v1' });
+const api = createClient({ baseUrl: 'https://api.test/v1', fetch: mock.fetch });
+```
+
+The other runtimes have the same mock transport (`tsurara_client.testing`, the Rust `testing` feature, the Go package `tsuraratest`), and `python.mocks`, `rust.mocks` and `go.mocks: true` generate their factories and routes ([Python](../languages/python.md#mocks), [Rust](../languages/rust.md#mocks), [Go](../languages/go.md#mocks)).
+
+<!-- docs/guide/monorepo.md -->
+
+# Monorepos
+
+Generate once into a shared package, and let every app import it. [examples/pnpm-monorepo](../../examples/pnpm-monorepo) is a working setup, tested in CI: a Vite app and a Node app sharing `@acme/openapi`.
+
+```
+packages/openapi/                 @acme/openapi
+  tsurara.config.yaml                input, output: src/generated, typescript.importExtension: ts
+  src/index.ts                    export * from '@tsurara/client'; export * from './generated/index.ts';
+  package.json                    "sideEffects": false, exports of .ts files
+apps/web/                         a bundled app
+apps/cli/                         run with Node type stripping
+```
+
+```json
+{
+  "name": "@acme/openapi",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./operations/*": "./src/generated/operations/*.ts",
+    "./schemas/*": "./src/generated/schemas/*.ts"
+  },
+  "dependencies": { "@tsurara/client": "..." }
+}
+```
+
+- The package is not built: its `exports` point at `.ts` files, generated with `importExtension: ts`, so bundlers and Node with type stripping (22.18 or later) both read them.
+- Every tsconfig that compiles code importing it needs `allowImportingTsExtensions` (with `noEmit`) or `rewriteRelativeImportExtensions`: each app, test package and tool. Without it TypeScript reports TS5097 inside the shared package's files, not in your code.
+- Bundles keep only the operations an app uses, even through the barrel (`sideEffects: false`). Node and dev servers load every module the barrel refers to, so for large definitions import from the subpaths: `@acme/openapi/operations/getPet`.
+- `@tsurara/client` is a dependency of the shared package and re-exported by it, so the workspace has one copy.
+- Run `tsurara check` in CI in the shared package: it fails when the generated files are out of date or the installed `@tsurara/client` does not match.
+- If a consumer cannot import `.ts` files, generate with `importExtension: js` and build the package to `.js` and `.d.ts` like any library.
+- Next.js (16.4, Turbopack or webpack) reads the package as it is: no `transpilePackages`, only `allowImportingTsExtensions` in its tsconfig. The example has a Next.js app.
+
+<!-- docs/guide/plugins.md -->
+
+# Plugins
+
+Hooks change what tsurara generates (see [Configuration](configuration.md#hooks)). The `extend` hook adds files next to the generated code: hooks for a data-fetching library, a client facade, documentation. It receives the names tsurara chose, so the added files refer to generated code without re-deriving names that collisions, reserved words and `naming.overrides` change.
+
+## The `extend` hook
+
+```yaml
+hooks:
+  extend: [node, scripts/hooks.mjs]
+```
+
+The command reads one JSON object on stdin:
+
+| Field | |
+|---|---|
+| `language` | `typescript`, `python`, `rust`, `go`, or `external` |
+| `model` | The model (versioned by `semVersion`) |
+| `manifest` | What the backend generated, by name (below); `null` for external backends that return none |
+| `common` | The common options of the target |
+| `marker` | The first line every added file must start with |
+
+and prints the files to add as `[{ "path": "...", "contents": "..." }]`. Paths are relative to the output directory. Each file must start with `marker`: tsurara then treats it as a generated file, deletes it when a later run no longer adds it, and `tsurara check` reports edits to it. A file without the marker, or with the path of a generated file, stops generation with an error.
+
+## The manifest
+
+```jsonc
+{
+  "manifestVersion": 1,
+  "language": "typescript",
+  "types": [{ "name": 3, "identifier": "ErrorModel", "file": "schemas/ErrorModel.ts" }],
+  "operations": [{
+    "operationId": "getPet",
+    "kind": "operation",
+    "function": { "identifier": "getPet", "file": "operations/getPet.ts" },
+    "operationDef": { "identifier": "getPetDef", "file": "operations/getPet.ts" },
+    "types": {
+      "data": { "identifier": "GetPetData", "file": "operations/getPet.ts" },
+      "result": { "identifier": "GetPetResult", "file": "operations/getPet.ts" }
+    }
+  }]
+}
+```
+
+- `types` lists the schemas of the definition, in order; `name` is the declaration's id in `model.schemas` and `model.names`.
+- `operations` lists the operations, then the webhooks (`kind: "webhook"`, without a function).
+- `file` is the file that declares the identifier. Write the import your language needs: a relative specifier with the import extension of the target in TypeScript (`'../operations/getPet.js'` by default), a module path in Python (`from ..operations.get_pet import get_pet`), `crate::<module>::types::Pet` or `crate::<module>::operations::get_pet` in Rust, and nothing in Go (one package).
+
+| Language | Roles in `types` | `operationDef` |
+|---|---|---|
+| TypeScript | `data`, `responses`, `errors`, `result`, `responseHeaders`, `event`, `item`; webhooks `request`, `responses` | `{name}Def` |
+| Python | `result` | `DEF` |
+| Rust | `options`, `body` (with several body media types) | — |
+| Go | `options`, `body` | — |
+
+`helpers` lists other values generated for an operation, by role: in TypeScript `queryKey`, `queryOptions`, `queryFilter`, `setQueriesData`, `getQueriesData`, `infiniteQueryKey` and `infiniteQueryOptions` for reads, `mutationOptions` for writes (with `query: tanstack`), and `mockHandler` (with `mocks`). A plugin that wraps them (hooks per operation, for example) finds their names and files there.
+
+Put added files in their own directory (`hooks/`, `swr/`) so their names cannot collide with generated ones; in Go, which has one package, give added identifiers a prefix of their own.
+
+## Example
+
+One file per operation with a wrapper around the call function:
+
+```js
+// scripts/hooks.mjs
+let input = '';
+process.stdin.on('data', (c) => (input += c));
+process.stdin.on('end', () => {
+  const { manifest, marker } = JSON.parse(input);
+  const js = (file) => `../${file.replace(/\.ts$/, '.js')}`;
+  const files = manifest.operations
+    .filter((op) => op.function)
+    .map(({ function: fn, types }) => {
+      const name = `use${fn.identifier[0].toUpperCase()}${fn.identifier.slice(1)}`;
+      return {
+        path: `hooks/${name}.ts`,
+        contents: `${marker}
+
+import type { Client } from '@tsurara/client';
+import { ${fn.identifier} } from '${js(fn.file)}';
+import type { ${types.data.identifier} } from '${js(types.data.file)}';
+
+export const ${name} = (client: Client<unknown>, data: ${types.data.identifier}): ReturnType<typeof ${fn.identifier}> =>
+  ${fn.identifier}(client, data);
+`,
+      };
+    });
+  process.stdout.write(JSON.stringify(files));
+});
+```
+
+## Plugins in TypeScript
+
+Hooks start a command per stage. A plugin module written with `@tsurara/plugin` takes part in any of the stages from one Node process per run, with typed inputs:
+
+```yaml
+plugins:
+  - ./tsurara.plugin.ts
+```
+
+```ts
+// tsurara.plugin.ts
+import { definePlugin, ts, type TypeScriptTargetOptions } from '@tsurara/plugin';
+
+export default definePlugin({
+  name: 'swr-hooks',
+  extend({ language, manifest, marker, options }) {
+    if (language !== 'typescript' || manifest == null) return [];
+    const target = options as TypeScriptTargetOptions;
+    return manifest.operations.flatMap((op) => {
+      if (op.function == null) return [];
+      const f = ts.file(`extra/${op.function.identifier}.ts`, target);
+      const fn = f.import(op.function); // `import { getPet } from '../operations/getPet.js'`
+      f.line(`export { ${fn} };`);
+      return [{ path: f.path, contents: f.render(marker) }];
+    });
+  },
+});
+```
+
+- The module runs with Node 22.18 or later (type stripping), in the directory of the configuration; install `@tsurara/plugin` there. `tsurara init --plugin` writes this skeleton, and [examples/plugin-swr](../../examples/plugin-swr/tsurara.plugin.ts) writes an SWR hook per read operation.
+- Stages: `transformDocument(document)`, `transformModel(model)`, `extend(input)` and `transformFiles(files)`; each returns its output, and may be async. Plugin modules run after the hooks of each stage.
+- `ts.file(path, options)` collects imports: `import(export)` and `importType(export)` take entries of the manifest and write specifiers with the target's import extension; `importFrom`, `importTypeFrom` and `importDefault` take packages; `render(marker)` writes the file.
+- Tests: `runPlugin(modulePath, { definition })` from `@tsurara/plugin/testing` runs tsurara (`TSURARA_BIN` or `tsurara` on the PATH) and returns the files by path.
+- `{ module, runtime }` runs a module with another command, for plugin SDKs in other languages.
+
+## Plugins in Python, Go and Rust
+
+The same session runs plugins written with the other SDKs; `runtime` is the command that starts them (tsurara appends the module path):
+
+| Language | SDK | Configuration |
+|---|---|---|
+| Python | `tsurara-plugin` ([packages/plugin-python](../../packages/plugin-python/README.md)) | `{ module: ./plugin.py, runtime: [python, -m, tsurara_plugin] }` |
+| Go | `github.com/tsurara-openapi/tsurara/packages/plugin-go` ([packages/plugin-go](../../packages/plugin-go/README.md)) | `{ module: ./plugin, runtime: [go, -C, ./plugin, run, .] }`, or a built binary |
+| Rust | the `tsurara-plugin` crate | `{ module: ./plugin/Cargo.toml, runtime: [cargo, run, --quiet, --manifest-path] }`, or a built binary |
+
+Python and Go get their types of the model and the manifest from tsurara itself (generated from `spec/plugin-protocol.schema.json` with the Python and Go backends); the Rust crate uses the Rust types. Python's `PyFile` and Go's `NewFile` write files with imports (Go's formatted with `go/format`). `transformDocument` and `transformModel` take and return JSON in these SDKs, so nothing a newer tsurara adds is lost. The same plugin written with each SDK produces the same files (`crates/tsurara-cli/tests/plugin_sdks.rs`).
+
+## External backends
+
+A backend written as an external program (`language: { command: [...] }`) returns the manifest from `generate` when it speaks protocol 2 (design.md 18.11). With protocol 1, `extend` hooks receive `manifest: null`.
+
+<!-- docs/guide/react.md -->
+
+# React and TanStack Query
+
+A walk through [`examples/react-tanstack`](../../examples/react-tanstack), a small Next.js app (App Router) over a card API: a search list read page by page, a detail page, an edit form, two tenants, tests with MSW, and server rendering. Everything that talks to the API is generated code and `@tsurara/client`; the app writes no query keys, no `queryFn`s and no type assertions.
+
+## Start
+
+```sh
+tsurara init --preset react-query   # writes tsurara.config.yaml and prints the packages to install
+npm install @tsurara/client @tanstack/react-query zod
+npm install --save-dev msw
+tsurara generate
+```
+
+The preset turns on query options (`query: tanstack`), Zod response schemas (`validators: zod`) and MSW handlers (`mocks: msw`), with extensionless imports, which Vite and Next.js resolve (Turbopack does not map `.js` imports to `.ts` files). The [configuration](configuration.md) lists every key.
+
+## The client and the QueryClient
+
+`src/api.ts` makes a client per session: the session's token in `auth`, and its tenant as the `queryScope`, which goes first in every query key of that client ([scopes](client.md#scopes-tenants-several-apis-logout)). The `QueryClient` retries with `queryRetry()` and reports statuses the definition does not document ([errors and retries](client.md#errors-and-retries)):
+
+```ts
+export const createApi = (session: Session): Client =>
+  createClient({ baseUrl, queryScope: { tenant: session.tenant }, auth: () => session.token });
+
+export const makeQueryClient = (report = …): QueryClient =>
+  new QueryClient({
+    defaultOptions: { queries: { retry: queryRetry(), staleTime: 30_000 } },
+    queryCache: new QueryCache({ onError: (e) => { if (e instanceof ApiError && e.result.kind === 'http' && !e.result.documented) report(e); } }),
+  });
+```
+
+`src/query-client.ts` follows TanStack's advice for server rendering: a new `QueryClient` per request on the server, so that requests and tenants never share a cache, and one for the page's life in the browser.
+
+## The list: search and infinite scrolling
+
+The definition writes the pagination on the operation, `x-tsurara-pagination: { param: query.cursor, next: /nextCursor }`, so `listCards` gets infinite query options ([infinite queries](client.md#infinite-queries)). The list (`src/components/CardList.tsx`) is one call, and hovering a card prefetches its detail:
+
+```tsx
+const cards = useInfiniteQuery(listCardsInfiniteQueryOptions(api, search === '' ? {} : { query: { q: search } }));
+// …
+onMouseEnter={() => void queryClient.prefetchQuery(getCardQueryOptions(api, { path: { cardId: card.id } }))}
+```
+
+Errors are branched on with the Result's information: `isHttpError(cards.error.result, 401)` for a signed-out session, `cards.error?.kind === 'network'` for a retry button.
+
+## Editing: optimistic updates, 422 and the cache
+
+`src/cards.ts` spreads the generated mutation options and adds the app's cache policy: the change shows at once, a refused change is rolled back, and a success replaces the card's entry and refetches every list of the tenant:
+
+```ts
+export const updateCardOptions = (api: Client, queryClient: QueryClient, scope: QueryScope) => ({
+  ...updateCardMutationOptions(api),
+  onMutate: async (input: UpdateCardData) => {
+    const key = getCardQueryKey({ path: input.path }, scope);
+    await queryClient.cancelQueries({ queryKey: key });
+    const previous = queryClient.getQueryData(key); // Card | undefined
+    if (previous) queryClient.setQueryData(key, { ...previous, ...input.body });
+    return { previous };
+  },
+  onError: (_e, input, context) => { if (context?.previous) queryClient.setQueryData(…, context.previous); },
+  onSuccess: async (card: Card) => {
+    queryClient.setQueryData(getCardQueryKey({ path: { cardId: card.id } }, scope), card);
+    await queryClient.invalidateQueries(listCardsQueryFilter(scope));
+  },
+});
+
+// The documented 422 body, typed:
+export const fieldErrors = (error: ApiError<UpdateCardResult> | null) =>
+  error && isHttpError(error.result, 422) ? error.result.error.fields : undefined;
+```
+
+## Tenants
+
+`src/session.tsx` switches tenants by dropping what the previous one cached, `queryClient.removeQueries(queryScopeFilter(scope))`, then making a client for the next session. Entries of other tenants stay.
+
+## Server rendering
+
+The pages (`app/page.tsx`, `app/cards/[cardId]/page.tsx`) prefetch on the server with the same options and hand the cache to the browser:
+
+```tsx
+export default async function Home() {
+  return (
+    <HydrationBoundary state={await prefetchCardList(await requestSession())}>
+      <CardList />
+    </HydrationBoundary>
+  );
+}
+```
+
+Keys hold only JSON values, so they hash the same in the browser after `dehydrate` on the server. The pages are dynamic (`export const dynamic = 'force-dynamic'`), since what they show depends on who is signed in.
+
+## Tests
+
+`test/` runs with Vitest and MSW, using the generated handlers (`listCardsHandler`, `getCardHandler`, `updateCardHandler`) with responses per test:
+
+- `cards.test.ts`: pages in order and the end of the list, the optimistic update seen by the server and kept, the rollback and the typed field errors of a 422, the lists refetched after an edit, tenants kept apart, and the retries (a 503 three times in all, a documented 404 once).
+- `components.test.tsx` (happy-dom): the list loads the next page on demand; a refused edit shows the field error and the title rolls back.
+- `ssr.test.tsx`: the server makes a `QueryClient` per request, and two concurrent renders for different tenants each contain only their own cards.
+
+MSW 3 names the option for requests without a handler `onUnhandledFrame` (`server.listen({ onUnhandledFrame: 'error' })`). In a browser-like test environment, give the page the API's origin (`environmentOptions.happyDOM.url`) so that requests with an `Authorization` header are not preceded by a CORS preflight that no handler answers.
+
+<!-- docs/guide/types.md -->
+
+# Types
+
+How schemas become TypeScript types. The rules are fixed and each row is a test (design.md 6.4); Python has its own table in [docs/languages/python.md](../languages/python.md).
+
+| Schema | TypeScript |
+|---|---|
+| `type: string`, `integer`, `number`, `boolean`, `null` | `string`, `number`, `number`, `boolean`, `null` |
+| `format: date-time`, `uuid`, `int64`, ... | The base type (`string`, `number`); the format goes in JSDoc. `typeMappings` can name another type that JSON parsing produces (a branded string, for example) |
+| `enum` | A union of literals (`'a' \| 'b'`); `enumStyle: const` adds an object of the values |
+| `const` | A literal type |
+| `nullable: true` (3.0), `type: [string, "null"]` (3.1) | `string \| null` |
+| `type: object` with `properties` | An object type; properties not in `required` are optional (`a?: T`) |
+| `additionalProperties: { ... }` with properties | An index signature whose value is the union of that schema and every property type (TypeScript requires it) |
+| `type: object` with no properties | `{ [key: string]: unknown }` |
+| `additionalProperties: false` and no properties | `{ [key: string]: never }` |
+| `type: array`, `items` | `T[]` |
+| `prefixItems` | A tuple: elements up to `minItems` are required, the rest optional, `items` gives the rest element |
+| `oneOf`, `anyOf` | A union |
+| `allOf` | Inline objects merge into one object type; named members stay references, intersected with at most one object literal (`Base & { extra?: string }`) |
+| `discriminator` | Each member intersected with its tag (`{ petType: 'cat' }`), so `switch (pet.petType)` narrows. A member that already requires the property as that `const` is not intersected |
+| A `text/event-stream` response with `itemSchema` (3.2) or `x-itemSchema` | `AsyncIterable<StreamEvent>`, where `StreamEvent` is `{ event: 'note'; data: Note; id?: string; retry?: number } \| ...` ([Server-Sent Events](client.md#server-sent-events)) |
+| An `application/jsonl`, `application/x-ndjson` or `application/json-seq` response with `itemSchema` or `x-itemSchema` | `AsyncIterable<ListItem>`, where `ListItem` is the item schema's type; the client parses each item |
+| Other streams (`text/event-stream` or JSON Lines without an item schema, ...) | `ReadableStream<Uint8Array>` |
+| `readOnly` / `writeOnly` | With `splitVisibility` (default), `Pet` for responses (no writeOnly properties) and `PetWritable` for requests (no readOnly properties) |
+| `$ref` | The named type; cycles always go through a named type |
+| `{}`, `true` | `unknown` |
+| `false` | `never` |
+| A binary body (`application/octet-stream`, images, ...) or a multipart part with `format: binary` | `Blob \| File` |
+| `format: binary` inside a JSON value | `string` (a JSON string cannot hold bytes; warned about) |
+| `x-tsurara-type` | The `typescript` entry |
+
+## Exact, approximated, rejected
+
+Types cannot express every constraint. For each keyword tsurara decides in advance how it is handled; one inexpressible keyword never turns the whole type into `unknown`.
+
+| Handling | Keywords | What you get |
+|---|---|---|
+| Exact | `type`, `enum`, `const`, `required`, nullable, `properties`, `allOf` of objects, `prefixItems` | The type alone expresses the rule |
+| Wider type | `oneOf` exclusivity, string and number constraints (`minLength`, `pattern`, `minimum`, ...), `uniqueItems`, `patternProperties` patterns, the long-tuple cases of `prefixItems` | The type also accepts some values the definition does not; the constraint is in JSDoc. No warning |
+| Keyword dropped | `not`, `if`/`then`/`else`, `dependentSchemas`, references that do not resolve | The type is built from the other keywords, with a warning. `tsurara generate --strict` makes warnings errors |
+| Rejected | Type mappings that change what JSON parsing produces (`Date`, `bigint`) | A configuration error |
+
+## Operation types
+
+Each operation file has the call function, its OperationDef, and types named after the function:
+
+| Type | |
+|---|---|
+| `GetPetData` | The input: `path`, `query`, `headers`, `cookies`, `body` |
+| `GetPetResponses` / `GetPetErrors` | Body types per documented status |
+| `GetPetResult` | What the function returns: success members, documented errors, an undocumented-status member, and the transport failures |
+| `GetPetResponseHeaders` | Typed response headers, when the definition has them |
+
+When a schema already has one of these names, the operation's type moves aside (`GetPetOperationResult`) with a warning; the function keeps its name.
+
+## Types without the client
+
+`operations: false` emits the declarations only, for DTOs on a server, payloads of a message queue, or requests made with another HTTP library:
+
+```yaml
+input: openapi.yaml
+output: src/types
+operations: false
+```
+
+The output has the schemas, webhooks and event channels, and no `operations/`, OperationDefs or call functions. Each language then needs only the types layer of its runtime, with no HTTP client:
+
+| Language | What the types need |
+|---|---|
+| TypeScript | Nothing: `schemas/` imports no module, and `index.ts` records no runtime version. Event channels (`channels/`, `zod/channels.ts`) import `decodeMessage` and `ChannelSchemas` from `@tsurara/client`, which send nothing |
+| Python | `tsurara-client` without extras: `import tsurara_client` and the TypeDef codec work without httpx. Call functions need `tsurara-client[http]` |
+| Rust | `tsurara-client = { version = "0.1", default-features = false }`: no tokio, no reqwest |
+| Go | The runtime module; generated types use only its union helpers and do not import `net/http` |
+
+The language pages show how to decode a value with the types alone.
+
+<!-- docs/guide/validation.md -->
+
+# Validation
+
+What tsurara checks, and what stays with you (design.md chapters 12 and 15).
+
+## What tsurara checks
+
+| Check | How |
+|---|---|
+| The generated files match the definition | `tsurara check` in CI: forgotten regeneration, hand edits |
+| The generated code and the runtime fit together | `tsurara check` compares the version range the code records with the installed `@tsurara/client` |
+| The definition is translated faithfully | Types are exact, wider (with the constraint in JSDoc), or the keyword is dropped with a warning ([Types](types.md)); `--strict` makes warnings errors |
+| A response's status and media type match the definition | At run time: undocumented statuses are `http` results with `documented: false` (`onUndocumentedStatus` observes them); a body that is not what the definition says is a `parse` result |
+
+## What tsurara does not check
+
+- **That responses match their schemas, unless you ask.** By default JSON is parsed, not validated: the types say what the definition promises, not what the server sent. With `typescript.validators: zod` and `validate: validateResponses(responseSchemas)` the client checks types and formats and returns `kind: 'validation'` for bodies that do not match ([The client](client.md#validation)). Contract tests on the server still catch drift before it ships.
+- **Constraints the types cannot express** (`pattern`, `minimum`, `maxLength`, ...), unless you ask. They are in JSDoc. With `typescript.validatorConstraints: true` the Zod schemas check them too (and the formats `uri`, `ipv4`, `ipv6`, `date`, `time`, `duration`), so they can validate form input; response validation then rejects values that break them. A `pattern` JavaScript cannot compile is left out with a warning. Requests are not validated before sending.
+- **Forms.** Validating user input in a UI is a different job (messages, partial values, fields that the API does not have). Use a form library with its own schema; tsurara types are a good target for its output.
+
+<!-- docs/languages/go.md -->
+
+# Go
+
+The Go backend (`language: go`, crate `tsurara-lang-go`) generates structs, named types with constants, and one function per operation for the runtime module `github.com/tsurara-openapi/tsurara/runtimes/go` (package `tsurara`, `runtimes/go`). This document describes the mapping. The backend is experimental: `tsurara generate` says so, and its output may change.
+
+Generated code and the runtime use the standard library only (`encoding/json`, `net/http`) and need Go 1.24 or later, for the `omitzero` struct tag option. Go is the first language near the minimal capability set: no unions, no inheritance, no native enums, no literal types, and only pointers to tell a missing value from a zero value.
+
+## Capabilities
+
+`tsurara_lang_go::CAPABILITIES` (design.md 18.5.2):
+
+| Capability | Value | Notes |
+|---|---|---|
+| `inline_records` | no | Inline objects become structs named after their place (`PetOwner`) |
+| `structural_unions` | no | Unions become wrapper structs (below) |
+| `tagged_unions` | yes | Also a wrapper struct, decoded by the discriminator instead of by trying members |
+| `intersections` | no | `allOf` becomes one struct with the fields copied |
+| `inheritance` | none | Embedding was considered and rejected: promoted fields with the same JSON name are silently dropped by `encoding/json` |
+| `literal_types` | no | A `const` is its scalar type |
+| `enums` | none | A named type with constants (`EnumRepr::Constants`) |
+| `tuples` | no | Lists |
+| `strict_decoding` | no | A named string or integer type accepts any value, so enums are open without a fallback |
+| `nullable_primitives` | yes | Pointers |
+| `recursion_by_value` | no | A struct cannot contain itself: pointers on the fields that close a cycle (pass 10); slices and maps need none |
+
+## Value conversion
+
+Annotations (design.md 18.7): `encoding/json` struct tags. What tags cannot express (unions, additional properties, optional and nullable fields) gets generated `MarshalJSON` and `UnmarshalJSON` methods that only call generic helpers of the runtime (`tsurara.UnmarshalTagged`, `tsurara.UnmarshalUntagged`, `tsurara.MarshalUnion`, `tsurara.MarshalWithExtra`, `tsurara.UnmarshalWithExtra`); the algorithms live in the runtime and are covered by its tests. OperationDefs carry no TypeDef references.
+
+`encoding/json/v2` (an experiment since Go 1.25) would remove some helpers (it tells missing from `null` with `omitzero` and has inline maps), but it is not stable in the oldest supported Go; the helpers keep the generated code the same when it can be used.
+
+## Mapping
+
+| Model | Go |
+|---|---|
+| Object | `type Pet struct { ... }` |
+| Required property | `Name T `json:"name"`` |
+| Optional property | `Name *T `json:"name,omitzero"`` (`nil` is missing); slices and maps without the pointer (`[]T`, `nil` is missing, an empty slice is sent as `[]`) |
+| Nullable property | `Name *T `json:"name"`` (`nil` is `null`) |
+| Optional and nullable | `Name tsurara.Nullable[T] `json:"name,omitzero"``, with `Missing`, `Null` and `Value` states (`tsurara.Value(v)`, `tsurara.Null[T]()`; Q3) |
+| `additionalProperties` | `AdditionalProperties map[string]T `json:"-"`` with generated methods that call `tsurara.MarshalWithExtra` and `tsurara.UnmarshalWithExtra` |
+| Object with only `additionalProperties` | `map[string]T` |
+| String enum | `type Status string` with `const ( StatusAvailable Status = "available"; ... )`; any other string is kept |
+| Integer enum | `type Level int64` with `const ( Level1 Level = 1; ... )` |
+| Discriminated union | `type Pet struct { Cat *Cat; Dog *Dog; Unknown json.RawMessage }` with one pointer per member; `UnmarshalJSON` reads the discriminator and decodes the whole object into that member, `MarshalJSON` writes the member that is set. `Unknown` (where values are received) keeps the JSON of an unlisted tag; the `defaultMapping` member takes it instead when there is one |
+| Other unions (`oneOf`, `anyOf`, type arrays) | The same wrapper (`Integer *int64; String *string`); `UnmarshalJSON` tries the members in order and keeps the first that decodes |
+| `allOf` | One struct with the fields of every member |
+| Alias | `type Name = T` |
+| `$ref` cycles | A pointer on the fields that close the cycle |
+| `integer` (`int32`, `int64`, none), `number`, `boolean` | `int32`, `int64`, `int64`, `float64`, `bool` |
+| `string` (any format) | `string`; formats are in the docs, and type mappings can name other types (`time.Time`) |
+| Array, map | `[]T`, `map[string]T` |
+| `{}`, external without a `go` entry | `any` |
+| Binary | `tsurara.File` (bytes, file name, media type) where sent (bodies, multipart parts); `[]byte` for responses |
+| `x-tsurara-type` / type mappings | The `go` entry, or `go.typeMappings` and `go.overrides`: a type with the import path of its package (`{ type: uuid.UUID, import: { from: github.com/google/uuid } }`, `{ type: time.Time, import: { from: time } }`), checked like 073 |
+
+### Approximations
+
+| Construct | Approximation |
+|---|---|
+| Untagged unions | The first member that decodes wins; struct members are decoded with unknown fields disallowed, so that an object does not match every struct. Required fields are not checked |
+| Required properties | Not checked when decoding: a missing one is the zero value |
+| Nullable required properties | A missing value decodes as `nil` |
+| `const` | Its scalar type |
+| Tuples | `[]any` |
+| String and number constraints, `oneOf` exclusivity | Not checked |
+| Integers written with a fraction (`1.0`) | Rejected by `encoding/json` |
+| Properties whose names a struct tag cannot hold (with `"`, `\\`, `,`, `'` or a backquote, or empty) | Left out, with a warning |
+| Tagged unions | `Unknown` is added where values are received; enums need no fallback, since a named type keeps any value |
+
+## Layout and naming
+
+One package in the output directory (Go cannot split a package across directories without import cycles). One file per declaration (`pet_gen.go`) and per operation (`get_pet_by_id_op_gen.go`), and `tsurara_gen.go` with the package documentation and the runtime version. File names end in `_gen.go`, so that no name ends in a build constraint (`_linux.go`, `_test.go`). Every file starts with `// Code generated by tsurara. DO NOT EDIT.`, the line Go tools recognize, and is printed as `gofmt` would (aligned fields, tags and comments), since backends run no formatter (18.8). Descriptions become `//` comments without their indentation and blank lines, so that gofmt finds no code blocks, lists or headings to rewrite.
+
+Everything is exported: types, fields, constants and functions are PascalCase with Go's initialisms (`ID`, `URL`, `HTTP`, `JSON`, `API`, ... as golint lists them, also in the plural: `PetID`, `PhotoURLs`, `GetPetByID`). A name whose first letter has no upper case gets `X` (`X日本語`), one that starts with a digit `V`. Enum constants are the type's name and the value (`PetStatusAvailable`). All of them share the package scope. Functions keep their operation's name: a schema with the same name moves aside, as `{Name}Body` when it is that operation's request body (`toggleAll` with the schema `ToggleAll` gives `ToggleAll(ctx, c, body ToggleAllBody, nil)`), otherwise as `{Name}Model`. Other collisions are numbered in claim order (types, constants, then functions). Go's keywords and predeclared identifiers are lower case, so exported names never collide with them; only names that would be empty or start with a digit change (`V1`). Fields are named per struct, after the names the struct uses itself (`AdditionalProperties`), and carry their JSON key in the tag.
+
+## Call functions and results
+
+```go
+func GetPetByID(ctx context.Context, c *tsurara.Client, petID int64, opts *GetPetByIDOptions) (*tsurara.Success[Pet], error)
+```
+
+- The doc comment starts with the function's name (`// GetPetByID calls GET /pet/{petId}.`), followed by the summary and description.
+- The context cancels the call and carries deadlines. Required parameters and a required body are arguments; everything optional is a pointer field of `{Operation}Options`, and `opts` may be `nil`.
+- A body with several media types is a wrapper struct `{Operation}Body` with one pointer per media type (`JSON *Pet`, `Form *Pet`, `OctetStream *tsurara.File`); the field that is set picks the `Content-Type`.
+- `*tsurara.Success[T]` has `Status`, `Data T`, `Headers` and `Operation`. `T` is the success body type: a response without content is `struct{}` (or the zero value of the other response's type), different types `any`; a response with a JSON media type is read as JSON (as in Rust). Binary responses are `[]byte`, text responses `string`.
+- Server-Sent Events, JSON Lines and JSON text sequences with an item schema (`itemSchema`, or `x-itemSchema` before 3.2; design.md 8.5) are `*tsurara.Success[*tsurara.Items[T]]` when every success is read item by item: the function calls `tsurara.DoItems` and returns once the headers have arrived, and `for item, err := range s.Data.All()` reads them. Events are a union wrapper with one pointer per event (`StreamEvent{StreamNoteEvent *StreamNoteEvent; ...; Unknown json.RawMessage}`), selected by `event`; several names of one event are a named type with constants (`MixedPingEventNamePong`). Leaving the loop closes the response, `Close` closes it without reading, and the client's timeout does not cover reading the items (the context does). With a JSON media type next to the stream, the operation is read as JSON as above.
+- The error is `*tsurara.Failure[E]` for every outcome of the contract except success, with `Kind` (`tsurara.KindHTTP`, `KindNetwork`, `KindTimeout`, `KindParse`, `KindUnexpected`, `KindAborted`), `Status`, `Documented` with the documented error body `E` when there is one, the raw body otherwise, and `Cause`. It unwraps to the cause, so `errors.Is(err, context.Canceled)` works. `errors.As(err, &failure)` with `var failure *tsurara.Failure[Problem]` gives the operation's documented body; `var f tsurara.AnyFailure` reads the failure of any operation, with `f.Info()` (`Kind`, `Status`, `Documented`, `Headers`, `Cause`, `Operation`).
+- OperationDefs are the JSON of `spec/operation-def.schema.json`, embedded as a string and parsed once (`sync.OnceValue`).
+- `tsurara_gen.go` records the runtime version the code needs (`// Requires github.com/tsurara-openapi/tsurara/runtimes/go v0.1.0`); `tsurara check` compares it with the requirement in the nearest `go.mod` (the same minor version), and only reports a module that a `replace` directive points elsewhere.
+- Arguments are lower camel case (`petID`); names that Go reserves or the function uses (`type`, `string`, `ctx`, `opts`) are numbered (`type2`). Options fields are exported like struct fields.
+
+## Options
+
+```yaml
+language: go
+go:
+  package: petstore                              # default: the output directory's name
+  runtimeModule: github.com/tsurara-openapi/tsurara/runtimes/go
+  typeMappings:                                  # per format
+    date-time: { type: time.Time, import: { from: time } }
+  overrides:                                     # per JSON Pointer
+    "#/components/schemas/Id": int64
+```
+
+## Types without the client
+
+With `operations: false` the package has only the declarations: no operation files, nothing that imports `net/http` or `context`. The runtime stays one package; generated types use only its union helpers (`types.go`, `value.go`), and the linker leaves out the client when nothing calls it. The types are plain `encoding/json` types:
+
+```go
+var pet petstore.Pet
+err := json.Unmarshal([]byte(`{"id":1,"name":"Pochi"}`), &pet)
+```
+
+## Mocks
+
+With `go.mocks: true`, `mocks_gen.go` is in the generated package with the build tag `tsurara_mocks`, so production builds leave it out and tests run with `go test -tags tsurara_mocks`:
+
+- `Mock{Type}()` decodes the sample value of each declaration.
+- Per operation, a constructor per documented status (`ShowPetByIDMock200(body Pet)`, `ShowPetByIDMockDefault(status int, body Error)`) and `ShowPetByIDRoute(respond)` for `tsuraratest` (nil: the first documented success); `MockRoutes()` lists every operation.
+
+Its names are claimed after every other name of the package, so turning mocks on never renames generated code.
+
+## Using it
+
+Generate into a directory of your module (`output: internal/petstore`), require the runtime (`go get github.com/tsurara-openapi/tsurara/runtimes/go`), and call the functions:
+
+```go
+c := tsurara.NewClient("https://petstore3.swagger.io/api/v3")
+pets, err := petstore.FindPetsByStatus(ctx, c, petstore.FindPetsByStatusStatusAvailable, nil)
+if err != nil {
+	return err
+}
+for _, pet := range pets.Data {
+	fmt.Println(pet.Name)
+}
+```
+
+<!-- docs/languages/python.md -->
+
+# Python
+
+The Python backend (`language: python`, crate `tsurara-lang-python`) generates dataclasses, enums and type aliases, with TypeDefs for a runtime that converts JSON generically (design.md 18.7). Generated code uses the runtime `tsurara-client` (`runtimes/python`): sync and async clients over httpx, Results, and the TypeDef codec; it passes the conformance vectors in `spec/`. Each operation gets a call function.
+
+Generated code requires Python 3.11 or later (design.md 18.16, Q2) and is checked with pyright as Python 3.11.
+
+## Quick start
+
+Install the generator (`npm install --save-dev tsurara`, or a binary from the [GitHub releases](https://github.com/tsurara-openapi/tsurara/releases)), then write `tsurara.config.yaml`:
+
+```yaml
+input: https://petstore3.swagger.io/api/v3/openapi.json
+output: api
+language: python
+```
+
+```sh
+tsurara generate
+pip install "tsurara-client[http]"     # the runtime, with httpx
+```
+
+```python
+from tsurara_client import Client, Success, unwrap
+from api import PetStatus
+from api.operations import find_pets_by_status, get_pet_by_id
+
+with Client("https://petstore3.swagger.io/api/v3") as client:
+    pets = unwrap(find_pets_by_status(client, status=PetStatus.AVAILABLE))
+    match get_pet_by_id(client, pet_id=1):
+        case Success(data=pet):
+            print(pet.name)
+```
+
+## Capabilities
+
+`tsurara_lang_python::CAPABILITIES` (design.md 18.5.2):
+
+| Capability | Value | Notes |
+|---|---|---|
+| `inline_records` | no | Inline objects become dataclasses named after their place (`PetOwner`) |
+| `structural_unions` | yes | `A \| B` |
+| `tagged_unions` | yes | Written as a union alias; the tag is in the TypeDef |
+| `intersections` | no | `allOf` becomes a dataclass: a base class for one reference, copied fields otherwise |
+| `inheritance` | single | Dataclass inheritance |
+| `literal_types` | yes | `Literal["cat"]` |
+| `enums` | any | `Enum` classes |
+| `tuples` | yes | One `tuple[...]` per allowed length |
+| `strict_decoding` | yes | Enums and discriminators are open where values are received, unless `strictEnums` |
+| `nullable_primitives` | yes | `X \| None` |
+| `recursion_by_value` | yes | |
+
+## Mapping
+
+| Model | Python |
+|---|---|
+| Object | `@dataclass(kw_only=True)` class; `kw_only` lets required fields follow defaulted ones, also through inheritance |
+| Required property | `name: T` |
+| Optional property | `name: T \| None = None` |
+| Nullable property | `name: T \| None` |
+| Optional and nullable | `name: T \| None \| Missing = MISSING` (`_support.py`); missing and `null` differ only here (Q3) |
+| `additionalProperties` | `additional_properties: dict[str, T] = field(default_factory=dict)` |
+| Enum | `class Status(Enum)` with members named from the values (`IT_S`, `VALUE_1`); at a received site the annotation is `Status \| str` (or `\| int`) |
+| Open tagged union | At a received site, `Cat \| Dog \| dict[str, Any]`: an unlisted discriminator keeps the JSON object |
+| Object with only `additionalProperties` | `dict[str, T]` |
+| `oneOf`, `anyOf`, type arrays | `Name: TypeAlias = "A \| B"` |
+| `integer`, `number`, `string`, `boolean` | `int`, `float`, `str`, `bool`; `format` is kept in the TypeDefs (dates stay `str` until the runtime converts them) |
+| Array, map | `list[T]`, `dict[str, T]` |
+| `prefixItems` | `tuple[A] \| tuple[A, B] \| tuple[A, B, *tuple[R, ...]]` |
+| Binary | `bytes \| File` (`File` from the runtime adds a file name and a media type); binary responses are `bytes` |
+| `x-tsurara-type` / type mappings | The `python` entry; without one, the schema's type and an `unmapped-type` warning |
+
+### Approximations
+
+| Construct | Approximation |
+|---|---|
+| `allOf` with a member that is not an object | One member is kept, with a warning (design.md 18.5.3, pass 2) |
+| `allOf` with several references | Fields are copied; the dataclass does not inherit from them |
+| String and number constraints, `oneOf` exclusivity | Not checked by the types, as in TypeScript |
+| Discriminated unions | The union alias accepts any member; the TypeDef selects by the tag |
+
+## Layout and naming
+
+One module per declaration (`pet.py`, `pet_owner.py`), `__init__.py` re-exporting every class, `_typedefs.py` with `TYPE_DEFS` and `CODEC` (the TypeDefs with this package's classes), and `_support.py`. Modules start with `from __future__ import annotations` and import the classes their annotations use under `if TYPE_CHECKING:`; only a base class is imported at run time, so recursive and mutually referencing types never form import cycles. Type aliases are strings for the same reason.
+
+Classes are PascalCase (component names that are identifiers are kept), members snake_case per class, with keywords and soft keywords getting `_` (`class_`, `type_`); a member whose JSON key differs gets a `# JSON: "..."` comment, and the TypeDef records the key. Names that generated modules use themselves (`Any`, `Enum`, `File`, `Missing`, ...) get `Model`. Modules are snake_case and case-folded.
+
+## Call functions
+
+`operations/` has one module per operation, named after its function (`operations/get_pet_by_id.py`), and `operations/__init__.py` re-exports the functions and their Result types. Each module has the OperationDef as `DEF` (with TypeDef references for the runtime), the Result type, and the function:
+
+```python
+from api import PetStatus
+from api.operations import get_pet_by_id, find_pets_by_status
+from tsurara_client import Client, Success, unwrap
+
+with Client("https://petstore3.swagger.io/api/v3") as client:
+    match get_pet_by_id(client, pet_id=1):
+        case Success(data=pet):
+            print(pet.name)
+    pets = unwrap(find_pets_by_status(client, status=PetStatus.AVAILABLE))
+```
+
+- Parameters are keyword-only, snake_case, after `client`. Optional parameters default to `None`, which means not sent. A parameter named like an argument the function has itself (`body`, `timeout`, ...) gets a number (`body2`), and keywords get `_` (`class_`).
+- `body` is the request body (`None` by default when optional); with several media types, `content_type` picks one (`Literal[...]`), the first by default.
+- `timeout` (seconds) and `context` (passed to hooks) are per call.
+- With `AsyncClient` the same function returns an awaitable (`@overload`).
+- The Result type is `Success[...] | HttpError[...] | UndocumentedStatus | TransportFailure`: the success data per documented status and media type (`None` without content), and the documented error bodies. `default` is an error when other successes are documented.
+- Server-Sent Events, JSON Lines and JSON text sequences with an item schema (`itemSchema`, or `x-itemSchema` before 3.2; design.md 8.5) are read item by item: the success data is `Iterator[StreamEvent]` with `Client` and `AsyncIterator[StreamEvent]` with `AsyncClient`, so such an operation has a second Result type, `{Operation}AsyncResult`. Events are dataclasses of a union tagged by `event` (`StreamNoteEvent`, with `data` decoded as its `contentSchema`); events the definition does not list arrive as dicts. Items of JSON Lines are their item schema's type (`{Operation}Item` when it is inline).
+- Generated code needs `tsurara-client>=0.1,<0.2`; `operations/__init__.py` says so. `tsurara check` does not check the installed Python runtime yet.
+
+## Types without the client
+
+With `operations: false` there is no `operations` package, and the output needs `tsurara-client` without the `http` extra: `import tsurara_client` and the TypeDef codec use only the standard library. Decode JSON with the generated codec:
+
+```python
+from api import Pet
+from api._typedefs import CODEC
+
+pet = CODEC.decode({"ref": "Pet"}, {"id": 1, "name": "Pochi"})
+assert isinstance(pet, Pet)
+CODEC.encode({"ref": "Pet"}, pet)  # {"id": 1, "name": "Pochi"}
+```
+
+Call functions import the client, which needs httpx: install `tsurara-client[http]` (the generated `operations/__init__.py` names it). Importing `Client` without httpx raises an `ImportError` that says so.
+
+## Mocks
+
+With `python.mocks: true`, the subpackage `mocks` has the values of the TypeScript mocks (design.md 8.9), built from the same samples (18.7.1):
+
+- `mocks/schemas.py`: `mock_pet(**overrides) -> Pet` decodes the sample with the package's TypeDefs; dataclasses take field overrides (`dataclasses.replace`).
+- `mocks/operations.py`: per operation, a constructor per documented status (`show_pet_by_id_200(body: Pet)`, `show_pet_by_id_default(status, body)`) and `show_pet_by_id_route(response=None)`, a route for `MockRouter` that answers with the first documented success by default; `routes()` lists every operation.
+
+```python
+router = MockRouter(base_path="/v1")
+router.extend(routes())
+client = Client("https://api.test/v1", http=httpx.Client(transport=httpx.MockTransport(router)))
+```
+
+## Options
+
+```yaml
+language: python
+python:
+  strictEnums: false   # true: unlisted enum and discriminator values are errors where received
+```
+
+<!-- docs/languages/rust.md -->
+
+# Rust
+
+The Rust backend (`language: rust`, crate `tsurara-lang-rust`) generates structs and enums with serde derives, and async call functions for the runtime crate `tsurara-client` (`runtimes/rust`). This document describes the mapping. The backend is experimental: `tsurara generate` says so, and its output may change.
+
+Generated code compiles with Rust 1.85 (the generator's MSRV) and depends only on `tsurara-client`, which re-exports `serde` and `serde_json`: derives name the crate with `#[serde(crate = "tsurara_client::serde")]`, so users add one dependency.
+
+## Capabilities
+
+`tsurara_lang_rust::CAPABILITIES` (design.md 18.5.2):
+
+| Capability | Value | Notes |
+|---|---|---|
+| `inline_records` | no | Inline objects become structs named after their place (`PetOwner`) |
+| `structural_unions` | no | Unions become enums |
+| `tagged_unions` | yes | Enums selected by the discriminator |
+| `intersections` | no | `allOf` becomes one struct with the fields copied (Rust has no inheritance) |
+| `inheritance` | none | |
+| `literal_types` | no | A `const` is its scalar type |
+| `enums` | any | String enums are Rust enums; integer and mixed enums become constants of their scalar type |
+| `tuples` | yes | Fixed-length tuples `(A, B)`; other tuples `Vec<serde_json::Value>` |
+| `strict_decoding` | yes | serde fails on unlisted values, so received enums and discriminators are open |
+| `nullable_primitives` | yes | `Option<T>` |
+| `recursion_by_value` | no | `Box<T>` on fields that close a cycle (pass 10), also cycles through unions |
+
+## Value conversion
+
+Annotations (design.md 18.7): serde derives and attributes. Constructs serde's derives cannot express go through macros of `tsurara-client`, which generated code invokes but does not implement. OperationDefs carry no TypeDef references.
+
+## Mapping
+
+| Model | Rust |
+|---|---|
+| Object | `#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)] pub struct Pet { ... }` |
+| Required property | `pub name: T`, with `#[serde(rename = "...")]` when the JSON key differs from the field name |
+| Optional property | `#[serde(default, skip_serializing_if = "Option::is_none")] pub name: Option<T>` |
+| Nullable property | `pub name: Option<T>` (`null` is `None`; a missing value is accepted too, a wider type) |
+| Optional and nullable | `#[serde(default, skip_serializing_if = "Nullable::is_missing")] pub name: tsurara_client::Nullable<T>`, an enum of `Missing`, `Null` and `Value(T)` (Q3) |
+| `additionalProperties` | `#[serde(flatten)] pub additional_properties: BTreeMap<String, T>` |
+| String enum | `pub enum Status { #[serde(rename = "available")] Available, ... }`; where values are received, also `#[serde(untagged)] Unknown(String)`, which keeps an unlisted value and writes it back |
+| Integer or mixed enum | `pub type Level = i64;` with `pub const LEVEL_1: Level = 1;` |
+| Discriminated union | `pub enum Pet { Cat(Cat), Dog(Dog) }` with `tsurara_client::tagged_union!`, which reads the discriminator and decodes the member from the whole object (the member keeps its tag field); the `defaultMapping` member takes unlisted values, and otherwise, where received, `Unknown(serde_json::Value)` does |
+| Other unions (`oneOf`, `anyOf`, type arrays) | `#[serde(untagged)] pub enum Id { Integer(i64), String(String) }`, members tried in order; variant names from the member types |
+| `allOf` | One struct with the fields of every member |
+| Alias | `pub type Name = T;`; an alias that contains itself (`Tree: { type: array, items: { $ref: Tree } }`) is a newtype, `#[serde(transparent)] pub struct Tree(pub Vec<Tree>);` |
+| `$ref` cycles | `Box<T>` on the fields that close the cycle |
+| `integer` (`int32`, `int64`, none) | `i32`, `i64`, `i64` |
+| `number` | `f64` |
+| `string` (any format), `boolean` | `String`, `bool`; formats are in the docs, and type mappings can name other types |
+| Array, map | `Vec<T>`, `BTreeMap<String, T>` |
+| `{}`, external without a `rust` entry | `serde_json::Value` |
+| Binary | `tsurara_client::File` where sent (bodies, multipart parts); `Vec<u8>` for responses |
+| `x-tsurara-type` / type mappings | The `rust` entry, a path with generics (`uuid::Uuid`, `chrono::DateTime<chrono::Utc>`), checked like 073 |
+
+### Approximations
+
+| Construct | Approximation |
+|---|---|
+| Nullable required properties | A missing value decodes as `None` |
+| `const` | Its scalar type |
+| Tuples with optional or rest elements | `Vec<serde_json::Value>` |
+| Untagged unions | The first member that decodes wins, as in every TypeDef runtime |
+| Discriminated unions with a member no value selects | An untagged union with the same members (an inline member selects by its property's `const` or `enum`; without one, nothing names it) |
+| Integer enums | Not checked: any integer decodes |
+| Integers written with a fraction (`1.0`) | Rejected, where the TypeDef runtimes coerce them |
+| String and number constraints, `oneOf` exclusivity | Not checked |
+
+## Layout and naming
+
+The output directory is a module: `mod.rs` declares `pub mod types;` and `pub mod operations;`, `types/mod.rs` declares one module per declaration (`types/pet.rs`) and re-exports every type, and each type module starts with `use super::*;`. Users include it with `mod api;` (or `#[path = "..."]`). No `Cargo.toml` is generated (Q5).
+
+Types are PascalCase, fields, functions and modules snake_case, enum variants and constants as their case requires. Keywords become raw identifiers for fields and functions (`r#type`), and get `Model` as types; names the generated code uses (`Option`, `Result`, `String`, `Vec`, `Box`, `BTreeMap`, `Nullable`, `File`, `Value`) get `Model` too. A field whose JSON key differs gets `#[serde(rename = "...")]`.
+
+## Call functions and results
+
+One async function per operation in `operations/` (`operations/get_pet_by_id.rs`, re-exported from `operations`):
+
+```rust
+pub async fn get_pet_by_id(
+    client: &tsurara_client::Client,
+    pet_id: i64,                    // required parameters, in definition order
+    options: GetPetByIdOptions,     // optional parameters, an optional body, and `timeout`
+) -> tsurara_client::ApiResult<Pet, Problem>
+```
+
+- Required parameters and a required body are arguments. Everything optional is a field of the operation's `{Operation}Options`, which derives `Default` (`get_pet_by_id(&client, 1, Default::default())`). For an optional parameter that allows `null`, `None` leaves it out; `null` cannot be sent on its own.
+- A body with several media types is an enum `{Operation}Body` with one variant per media type (`Json(Pet)`, `Form(Pet)`, `OctetStream(tsurara_client::File)`, `Multipart(...)`); the variant picks the `Content-Type`.
+- Binary bodies and multipart file parts are `tsurara_client::File`: bytes with an optional file name and media type. A multipart body is a struct whose fields become parts in order; a list of files becomes one part per file.
+- `ApiResult<S, E> = Result<Success<S>, Failure<E>>`. `S` is the success body type and `E` the documented error body type. A response without content is `()`. When the responses have one type and no content, it is `Option<T>`; when they have different types, `serde_json::Value`. Binary responses are `Vec<u8>`, text responses `String`.
+- Server-Sent Events, JSON Lines and JSON text sequences with an item schema (`itemSchema`, or `x-itemSchema` before 3.2; design.md 8.5) are `tsurara_client::Items<T>` when every success is read item by item: the function calls `Client::request_items` and returns once the headers have arrived, and `items.next().await` gives each item as `Result<T, ItemError>`. Events are a union tagged by `event` (`StreamEvent::StreamNoteEvent(StreamNoteEvent)` and so on, and `Unknown` for names the definition does not list). Dropping `Items` closes the response, and the client's timeout does not cover reading the items. With a JSON media type next to the stream, the operation is read as JSON as below.
+- A response with a JSON media type is read as JSON, and a body in its other media types is a `Parse` failure. tsurara sends no `Accept`, so servers answer with their default media type, which is JSON for every corpus definition.
+- `Failure` has the contract's kinds (`Http` with a documented or undocumented body, `Network`, `Timeout`, `Parse`, `Unexpected`) and implements `std::error::Error`, so `?` works. Dropping the future cancels the call; there is no `aborted` result, as in Python.
+- OperationDefs are the JSON of `spec/operation-def.schema.json`, embedded as a raw string and parsed once (`LazyLock`).
+- `mod.rs` records the runtime version the code needs (`// Requires tsurara-client ^0.1.0`); `tsurara check` compares it with `tsurara-client` in the nearest `Cargo.lock`.
+
+### Using it
+
+Generate into a directory of your crate (`output: src/api`), add the runtime (`cargo add tsurara-client`) and `mod api;`:
+
+```rust
+use api::operations::*;
+use api::types::*;
+use tsurara_client::{Client, Failure};
+
+let client = Client::builder("https://petstore3.swagger.io/api/v3").build();
+let pets = find_pets_by_status(&client, FindPetsByStatusStatus::Available, Default::default()).await?;
+match get_pet_by_id(&client, 1, Default::default()).await {
+    Ok(pet) => println!("{}", pet.data.name),
+    Err(Failure::Http { status: 404, .. }) => println!("no such pet"),
+    Err(other) => return Err(other.into()),
+}
+```
+
+## Options
+
+```yaml
+language: rust
+rust:
+  runtimeCrate: tsurara_client   # the path generated code uses for the runtime
+  typeMappings:               # per format
+    date-time: chrono::DateTime<chrono::Utc>
+  overrides:                  # per JSON Pointer
+    "#/components/schemas/Id": uuid::Uuid
+```
+
+## Types without the client
+
+With `operations: false`, `mod.rs` declares only `types` (and `mocks` with `rust.mocks`), and the types need the runtime without its `client` feature:
+
+```toml
+[dependencies]
+tsurara-client = { version = "0.1", default-features = false }
+```
+
+That leaves `Nullable`, `File`, `tagged_union!` and the re-exported `serde` and `serde_json`: no tokio, no reqwest. The types are plain serde types:
+
+```rust
+let pet: api::types::Pet = tsurara_client::serde_json::from_str(r#"{"id":1,"name":"Pochi"}"#)?;
+```
+
+The runtime's features: `client` (the client, Results, retries, sequences; tokio), `reqwest` (the default transport, enables `client`), `testing` (the mock transport). The default is `client` and `reqwest`.
+
+## Mocks
+
+With `rust.mocks: true`, the module `mocks` is declared under `#[cfg(any(test, feature = "mocks"))]`, so it is compiled for the crate's own tests and with a crate feature `mocks` that enables `tsurara-client/testing`:
+
+- `mocks/schemas.rs`: `mock_pet() -> Pet` decodes the sample value; change fields with struct update syntax (`Pet { name: "Tama".into(), ..mock_pet() }`).
+- `mocks/operations.rs`: per operation, `ShowPetByIdMockResponse` with a variant per documented status (`Status200(Pet)`, `Default(u16, Error)`) and `show_pet_by_id(mock, respond)`, which adds the route to a `MockTransport`; `routes(mock)` adds every operation with its first documented success.
+
+## Compile time
+
+Every type derives `Serialize`, `Deserialize`, `Debug`, `Clone` and `PartialEq`, and lives in its own module. On an Apple Silicon laptop (2026-11-17), `cargo clippy` of the output with call functions takes about 40 seconds for OpenAI (6,200 types), 110 seconds for GitHub 3.1 (8,200 types, 1,270 operations) and 100 seconds for Stripe (11,400 types); `cargo check` of OpenAI's types alone takes 14 seconds.
+
+Each type module imports the types it uses by name (`use super::{Owner, Tag};`). Earlier versions imported their parent with a glob (`use super::*`), whose `pub use` globs cover every type module: name resolution became quadratic, and took 80 of OpenAI's 95 seconds of `cargo check` (`-Z time-passes`: `resolve_crate` 52 s, `compute_effective_visibilities` 29 s) while derive expansion took 23. Stripe did not finish in 90 minutes. What remains is spent in type checking, borrow checking and derive expansion, in about equal parts.
+
+Generated code is a module of the user's crate; putting it in a crate of its own keeps it out of incremental rebuilds. Splitting the output by tag into features, and deriving only the direction a type is used in, would save little after the fix, and are not done.
+
+<!-- skills/tsurara/SKILL.md -->
+
+---
+name: tsurara
+description: Write application code against API clients generated by tsurara from OpenAPI (TypeScript, Python, Rust, Go). Use when a project has `tsurara.config.yaml` or files starting with "Generated by tsurara", when calling an endpoint of such an API, handling its Results, using it with TanStack Query, changing what is generated, or testing code that calls it with the generated mocks.
+---
+
+# tsurara
+
+tsurara generates types and one call function per operation from an OpenAPI definition. The generated code calls a small runtime (`@tsurara/client`, `tsurara-client` for Python and Rust, `github.com/tsurara-openapi/tsurara/runtimes/go`). `tsurara.config.yaml` lists the targets: input definition, output directory, language and options.
+
+## Rules
+
+1. Never edit generated files. They start with a marker (`// Generated by tsurara. Do not edit.`, `# Generated by tsurara. Do not edit.`, `// Code generated by tsurara. DO NOT EDIT.`). Change the definition or `tsurara.config.yaml`, then run `tsurara generate`.
+2. Call the generated function for an endpoint; do not build URLs or `fetch` requests by hand. Find it with `tsurara inspect operations --search "<words>"` or the MCP tool `search_operations`, then `tsurara inspect operation <id>` (or `describe_operation`) for its parameters and a call example that compiles.
+3. Use what else is generated for the operation instead of writing it: TanStack Query options, keys and filters, and mock handlers and factories for tests. `inspect operation` lists them under "also generated" (`helpers` in JSON).
+4. Calls return a Result instead of throwing (except Rust and Go, which return `Result`/`error` as the language does). Check success before using the data; use `unwrap` where an exception is the right failure.
+5. Run `tsurara check` before finishing. It fails when generated files are stale or edited, or the runtime version does not match.
+6. `tsurara generate` prints warnings with a code and a JSON Pointer into the definition; `tsurara inspect warning <code>` explains each and how to fix it.
+
+## Finding answers
+
+| Question | Command (add `--format json` to parse it) | MCP tool |
+|---|---|---|
+| Which targets and languages? | read `tsurara.config.yaml` | `list_targets` |
+| Which function calls `GET /pets/{id}`? | `tsurara inspect operations --search "get pet"` | `search_operations` |
+| How do I call it? | `tsurara inspect operation getPetById --target <name>` | `describe_operation` |
+| What does the type `Pet` look like? | `tsurara inspect schema Pet --target <name>` | `describe_schema` |
+| What does warning `renamed` mean? | `tsurara inspect warning renamed` | `explain_warning` |
+
+## References
+
+Read the one for the language you are writing:
+
+- [references/typescript.md](references/typescript.md): Results, `unwrap`, `ApiError`, middleware
+- [references/tanstack-query.md](references/tanstack-query.md): TanStack Query options, keys, scopes, infinite queries, retries, and MSW handlers for tests
+- [references/python.md](references/python.md): `match` on Results, `unwrap`, async clients
+- [references/rust.md](references/rust.md): `Result<Success, Failure>` and its variants
+- [references/go.md](references/go.md): `(*Success[T], error)` and `*Failure[E]`
+- [references/configuration.md](references/configuration.md): targets, `extends`, type mappings, validators, query options, mocks, hooks and plugins
+
+<!-- skills/tsurara/references/configuration.md -->
+
+# Configuration
+
+`tsurara.config.yaml` (or `.json`, `.toml`) at the project root; `docs/guide/configuration.md` in the tsurara repository (or the MCP resource `tsurara://docs/guide/configuration.md`) lists every key.
+
+```yaml
+input: ./openapi.yaml            # a file or a URL
+targets:
+  - name: web
+    output: ./web/src/api
+    typescript:
+      importExtension: ts        # js (default), ts or none
+      validators: zod            # also generate Zod schemas for validateResponses
+      validatorConstraints: true # and check minLength, pattern, minimum, ... in them
+      query: tanstack            # TanStack Query options, keys and filters (query/)
+      mocks: msw                 # MSW handlers and mock factories (mocks/); or fetch
+      infiniteQueries:           # pagination of reads, for infinite query options
+        listPets: { param: query.cursor, next: /nextCursor }
+  - name: worker
+    output: ./worker/api
+    language: python
+naming:
+  overrides:
+    "#/components/schemas/Error": ApiError   # rename by JSON Pointer
+typeMappings:
+  - match: { type: string, format: uuid }
+    typescript: { type: Uuid, import: { from: ./ids.ts, name: Uuid } }
+hooks:
+  afterWrite:
+    - [biome, format, --write, "{output}"]
+```
+
+- `extends: ./base.yaml` merges another file; paths stay relative to the file they are written in.
+- `${ENV}` in strings is replaced with environment variables (an unset one is an error).
+- Hooks: `transformDocument`, `transformModel`, `extend` (add files next to the generated code, with the manifest of generated names; see `docs/guide/plugins.md`), `transformFiles`, `afterWrite`.
+- `tsurara init --preset react-query` writes a configuration with query options, Zod schemas and MSW handlers for a React app, and prints the packages to install.
+- Pagination can also be written on the operation in the definition: `x-tsurara-pagination: { param: query.cursor, next: /nextCursor }`.
+- Python, Rust and Go generate mocks with `python.mocks`, `rust.mocks` and `go.mocks: true`.
+- After changing the definition or the configuration, run `tsurara generate`, then `tsurara check` in CI.
+
+<!-- skills/tsurara/references/go.md -->
+
+# Go
+
+Each operation is a function in the generated package: `ctx`, the client, required parameters, the body, then `*{Op}Options` (or `nil`). It returns `(*tsurara.Success[T], error)`; failures are `*tsurara.Failure[E]`.
+
+```go
+package api
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	tsurara "github.com/tsurara-openapi/tsurara/runtimes/go"
+)
+
+// PetName returns the name of a pet, or "" when it cannot be read.
+func PetName(ctx context.Context, c *tsurara.Client, petID string) string {
+	res, err := ShowPetByID(ctx, c, petID, nil)
+	var failure *tsurara.Failure[Error]
+	switch {
+	case err == nil:
+		return res.Data.Name
+	case errors.As(err, &failure) && failure.Kind == tsurara.KindHTTP && failure.Documented:
+		fmt.Println(failure.Status, failure.Body.Message)
+	default:
+		fmt.Println(err)
+	}
+	return ""
+}
+
+// NewPetClient creates the client for the API.
+func NewPetClient() *tsurara.Client {
+	return tsurara.NewClient("https://petstore.example.com/v1")
+}
+```
+
+- Optional fields are pointers; types without a Go equivalent (unions) are wrapper structs with methods.
+- `tsurara.NewClient` takes options: `WithHeader`, `WithTimeout`, `WithRetry`, `WithAuth`.
+- Tests: with `go.mocks: true`, `mocks_gen.go` (build tag `tsurara_mocks`, so run `go test -tags tsurara_mocks`) has `Mock{Type}()`, a constructor per documented status and `{Op}Route(respond)` for `tsuraratest` (`docs/languages/go.md`, "Mocks").
+
+<!-- skills/tsurara/references/python.md -->
+
+# Python
+
+Each operation is a function in `operations/<name>.py` taking the client first and keyword arguments after it; it returns a Result object. The same function works with `Client` and, awaited, with `AsyncClient`.
+
+```python
+from tsurara_client import Client, HttpError, Success, unwrap
+
+from .operations.show_pet_by_id import show_pet_by_id
+from .pet import Pet
+
+
+def pet_name(pet_id: str) -> str | None:
+    with Client("https://petstore.example.com/v1") as client:
+        match show_pet_by_id(client, pet_id=pet_id):
+            case Success(data=pet):
+                return pet.name
+            case HttpError(status=status, error=error):
+                print(status, error)
+            case other:
+                print("failed:", other.kind)
+    return None
+
+
+def load_pet(client: Client[None], pet_id: str) -> Pet:
+    # Raises ApiError on any failure.
+    return unwrap(show_pet_by_id(client, pet_id=pet_id))
+```
+
+- Records are dataclasses and enums are `Enum` classes; the runtime converts JSON with the TypeDefs in `_typedefs.py` (`CODEC.decode` / `CODEC.encode`).
+- Optional parameters are keyword arguments that default to `None`; a value that may be absent or `null` uses `MISSING` for absent.
+- Tests: with `python.mocks: true`, `mocks/schemas.py` has `mock_pet(**overrides)` and `mocks/operations.py` a constructor per documented status and `show_pet_by_id_route(response=None)` per operation, for the `MockRouter` of `tsurara_client.testing` (`docs/languages/python.md`, "Mocks"). Use them instead of hand-written fixtures.
+
+<!-- skills/tsurara/references/rust.md -->
+
+# Rust
+
+Each operation is an `async fn` in the generated `operations` module: required parameters are arguments, optional ones fields of `{Op}Options` (which implements `Default`). It returns `Result<Success<T>, Failure<E>>`.
+
+```rust
+use super::operations::show_pet_by_id;
+use tsurara_client::{ErrorBody, Failure};
+
+pub async fn pet_name(client: &tsurara_client::Client, pet_id: &str) -> Option<String> {
+    match show_pet_by_id(client, pet_id.to_owned(), Default::default()).await {
+        Ok(success) => Some(success.data.name),
+        Err(Failure::Http {
+            status,
+            body: ErrorBody::Documented(error),
+            ..
+        }) => {
+            eprintln!("{status}: {}", error.message);
+            None
+        }
+        Err(failure) => {
+            eprintln!("{failure:?}");
+            None
+        }
+    }
+}
+
+pub fn client() -> tsurara_client::Client {
+    tsurara_client::Client::builder("https://petstore.example.com/v1").build()
+}
+```
+
+- Types are in the generated `types` module; optional fields are `Option<T>`, nullable ones `Nullable<T>`.
+- The runtime re-exports `serde` and `serde_json`; generated code needs no other dependency.
+- Tests: with `rust.mocks: true`, `mocks::schemas::mock_pet()` and per operation a `{Op}MockResponse` with a variant per documented status and a function that adds the route to the runtime's `MockTransport` (the `testing` feature; `docs/languages/rust.md`, "Mocks").
+
+<!-- skills/tsurara/references/tanstack-query.md -->
+
+# TanStack Query and mocks (TypeScript)
+
+With `typescript.query: tanstack`, every operation also has options for TanStack Query 5 in `query/{function}.ts`, and with `typescript.mocks: msw` an MSW handler in `mocks/operations/{function}.ts`. Use them instead of writing a `queryFn`, a query key or a request handler by hand: `tsurara inspect operation <id>` (or `describe_operation`) lists them under "also generated". `tsurara init --preset react-query` turns both on; `docs/guide/react.md` walks through a complete app.
+
+```ts
+import {
+  QueryClient,
+  skipToken,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
+import { createClient, isHttpError, queryRetry, queryScopeFilter } from '@tsurara/client';
+import { createPetsMutationOptions } from './query/createPets.js';
+import { listPetsQueryFilter } from './query/listPets.js';
+import {
+  setShowPetByIdQueriesData,
+  showPetByIdQueryKey,
+  showPetByIdQueryOptions,
+} from './query/showPetById.js';
+
+// One client per session; `queryScope` keeps the cache of tenants (or APIs) apart.
+const scope = { tenant: 'acme' };
+const api = createClient({ baseUrl: 'https://petstore.example.com/v1', queryScope: scope });
+
+// Retries like the retry() middleware (network failures, 408, 429, 5xx), never 404 or 422.
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: queryRetry() } } });
+
+export function usePetName(petId: string | undefined): string | undefined {
+  // `skipToken` while the input is not known; `select` decides the type of `data`.
+  const pet = useQuery({
+    ...showPetByIdQueryOptions(api, petId === undefined ? skipToken : { path: { petId } }),
+    select: (p) => p.name,
+  });
+  if (pet.error && pet.error.kind === 'http' && pet.error.status === 404) return undefined;
+  return pet.data;
+}
+
+function useCreatePet() {
+  const qc = useQueryClient();
+  return useMutation({
+    ...createPetsMutationOptions(api),
+    onSuccess: async () => {
+      // Every listPets query of this tenant, by the generated filter: no hand-written key.
+      await qc.invalidateQueries(listPetsQueryFilter(scope));
+    },
+    onError: (error) => {
+      // The documented error body, typed, when the status is documented.
+      if (isHttpError(error.result, 500)) console.error(error.result.error.message);
+    },
+  });
+}
+
+export function renamePet(petId: string, name: string): void {
+  // One entry by its key, or every showPetById entry with the data typed.
+  queryClient.setQueryData(showPetByIdQueryKey({ path: { petId } }, scope), (old) => old && { ...old, name });
+  setShowPetByIdQueriesData(queryClient, (old) => old && { ...old, name }, scope);
+}
+
+export function signOut(): void {
+  queryClient.removeQueries(queryScopeFilter(scope));
+}
+
+void useCreatePet;
+```
+
+- Keys are `[operationId, data]`, or `[{ scope }, operationId, data]` for a client with `queryScope`; build them with `{function}QueryKey(data, scope)`, never by hand.
+- Paginated lists: write the pagination on the operation (`x-tsurara-pagination: { param: query.cursor, next: /nextCursor }`) or in `typescript.infiniteQueries`; the read then has `{function}InfiniteQueryOptions`, for `useInfiniteQuery`.
+- The options throw `ApiError` (they `unwrap`); `error.result` is the Result, so branch with `isHttpError(error.result, status)` and `error.kind`.
+
+Tests use the generated handlers; each takes a documented response, or a function of the request that returns one:
+
+```ts
+import { setupServer } from 'msw/node';
+import { handlers } from './mocks/index.js';
+import { showPetByIdHandler } from './mocks/operations/showPetById.js';
+import { mockPet } from './mocks/schemas/Pet.js';
+
+const server = setupServer(...handlers);
+server.listen({ onUnhandledFrame: 'error' }); // MSW 3; `onUnhandledRequest` in MSW 2
+server.use(showPetByIdHandler(({ params }) => ({ status: 200, body: mockPet({ id: Number(params.petId) }) })));
+```
+
+<!-- skills/tsurara/references/typescript.md -->
+
+# TypeScript
+
+Each operation is a function `operationId(client, options)` in `operations/`, with types `{Op}Data` (its input), `{Op}Result` (every outcome) and the schema types in `schemas/`. Create one client per base URL and pass it explicitly.
+
+```ts
+import { createClient, unwrap } from '@tsurara/client';
+import { showPetById } from './operations/showPetById.js';
+import type { Pet } from './schemas/Pet.js';
+
+const api = createClient({ baseUrl: 'https://petstore.example.com/v1' });
+
+// Results never throw: check `ok`, then `kind`.
+export async function petName(petId: string): Promise<string | undefined> {
+  const result = await showPetById(api, { path: { petId } });
+  if (result.ok) {
+    return result.data.name;
+  }
+  if (result.kind === 'http' && result.documented) {
+    console.error(result.status, result.error.message); // the documented error body
+  } else {
+    console.error(result.kind); // network, timeout, aborted, parse, ...
+  }
+  return undefined;
+}
+
+// Where an exception is right (inside a TanStack Query queryFn, a script): `unwrap` returns the data
+// or throws `ApiError` with the Result.
+export async function loadPet(petId: string): Promise<Pet> {
+  return unwrap(await showPetById(api, { path: { petId } }));
+}
+```
+
+- Imports end in the configured extension (`.js` by default, `.ts` with `typescript.importExtension: ts`).
+- `{ path, query, headers, cookies, body }` follow the definition; optional parameters can be left out.
+- Request bodies of several media types take `contentType` next to `body`.
+- `createClient` options: `headers`, `auth` (per security scheme), `timeout`, `middleware`, `onResult`, `validate` (with the generated Zod schemas, `typescript.validators: zod`), `queryScope` (TanStack Query keys).
+- With TanStack Query or MSW, read [tanstack-query.md](tanstack-query.md): use the generated options and handlers, not a hand-written `queryFn`, key or handler.

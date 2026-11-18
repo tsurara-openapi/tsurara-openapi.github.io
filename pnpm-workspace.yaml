@@ -1,0 +1,5 @@
+# Versions released less than 5 days (7200 minutes) ago are not installed, as in tsurara.
+minimumReleaseAge: 7200
+allowBuilds:
+  esbuild: true
+  sharp: false
