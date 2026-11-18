@@ -1,7 +1,7 @@
 ---
 title: "设计"
 sourcePath: docs/design.md
-sourceHash: faa01e846180
+sourceHash: 7153d85fc480
 ---
 
 本文档描述 tsurara 的设计。tsurara 是一个根据 OpenAPI 定义生成 TypeScript 类型和 API 调用函数的工具。

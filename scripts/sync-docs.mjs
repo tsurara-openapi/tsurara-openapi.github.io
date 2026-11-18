@@ -6,8 +6,9 @@
 //   src/content/docs/ (the English locale). The first H1 becomes the `title`.
 // - Relative links between those files become links between pages; links to other files of
 //   the repository become GitHub links pinned to the synced commit.
-// - Every page records `sourceHash`, a hash of its English text. Translations copy the hash
-//   of the text they were made from; `pnpm translations` lists the stale ones.
+// - Every page records `sourceHash`, a hash of its English text (without the pinned commit).
+//   Translations copy the hash of the text they were made from; `pnpm translations` lists the
+//   stale ones. GitHub links in translations are moved to the synced commit.
 // - llms.txt and llms-full.txt are copied into public/.
 // - The samples on the home page are generated with the checkout's tsurara binary.
 // - tsurara.json records the commit.
@@ -80,7 +81,11 @@ function rewriteLinks(text, from) {
     .join('\n');
 }
 
-const hash = (text) => createHash('sha256').update(text).digest('hex').slice(0, 12);
+// The hash leaves out the commit in GitHub links, so that a sync to another commit marks only
+// pages whose text changed as stale.
+const pinned = new RegExp(`(${repoUrl.replace(/[.]/g, '\\.')}/(?:blob|tree)/)[0-9a-f]{40}/`, 'g');
+const hash = (text) =>
+  createHash('sha256').update(text.replace(pinned, '$1-/')).digest('hex').slice(0, 12);
 const yamlString = (s) => JSON.stringify(s);
 
 function convert(from) {
@@ -117,6 +122,22 @@ for (const [from, slug] of pages) {
   writeFileSync(out, convert(from));
 }
 
+// Translations keep the English links; point their GitHub links at the synced commit too.
+for (const locale of ['ja', 'zh-cn']) {
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (/\.mdx?$/.test(entry.name)) {
+        const text = readFileSync(path, 'utf8');
+        const pinnedText = text.replace(pinned, `$1${commit}/`);
+        if (pinnedText !== text) writeFileSync(path, pinnedText);
+      }
+    }
+  };
+  if (existsSync(join(docsDir, locale))) walk(join(docsDir, locale));
+}
+
 // llms.txt links to Markdown files of the repository; point them at the pinned commit.
 const llms = readFileSync(join(source, 'llms.txt'), 'utf8').replace(
   /\]\(([^)\s:]+\.md)\)/g,
@@ -142,8 +163,10 @@ if (binary === undefined) {
   execFileSync(binary, ['generate'], { cwd: samples, stdio: 'inherit' });
 }
 
-writeFileSync(
-  join(root, 'tsurara.json'),
-  `${JSON.stringify({ repository: repoUrl, commit, version: execFileSync(binary ?? 'true', ['--version'], { encoding: 'utf8' }).trim() }, null, 2)}\n`,
-);
+// Without a binary the samples were not regenerated, so the recorded version stays.
+const lockPath = join(root, 'tsurara.json');
+const previous = existsSync(lockPath) ? JSON.parse(readFileSync(lockPath, 'utf8')) : {};
+const version =
+  binary === undefined ? previous.version : execFileSync(binary, ['--version'], { encoding: 'utf8' }).trim();
+writeFileSync(lockPath, `${JSON.stringify({ repository: repoUrl, commit, version }, null, 2)}\n`);
 console.log(`synced ${pages.size} pages from ${relative(root, source) || source} at ${commit.slice(0, 12)}`);

@@ -1,10 +1,10 @@
 ---
 title: "The client"
 sourcePath: docs/guide/client.md
-sourceHash: ef7e6a11dc65
+sourceHash: ae5607fe4635
 ---
 
-Generated functions take a client as their first argument. `@tsurara/client` (TypeScript) is described here; the Python runtime `tsurara-client` has the same model ([its README](https://github.com/tsurara-openapi/tsurara/blob/c5cc557cdb42c8f28966541163492b2cf79bd296/runtimes/python/README.md)).
+Generated functions take a client as their first argument. `@tsurara/client` (TypeScript) is described here; the Python runtime `tsurara-client` has the same model ([its README](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/runtimes/python/README.md)).
 
 ```ts
 import { createClient, retry } from '@tsurara/client';

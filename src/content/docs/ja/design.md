@@ -1,7 +1,7 @@
 ---
 title: "設計"
 sourcePath: docs/design.md
-sourceHash: faa01e846180
+sourceHash: 7153d85fc480
 ---
 
 この文書は、OpenAPIの定義からTypeScriptの型とAPIの呼び出し関数を生成するツール、tsuraraの設計を述べる。

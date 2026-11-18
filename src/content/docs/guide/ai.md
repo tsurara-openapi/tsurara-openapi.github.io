@@ -1,7 +1,7 @@
 ---
 title: "Coding agents"
 sourcePath: docs/guide/ai.md
-sourceHash: bda3aa0b3010
+sourceHash: 2a037fd06058
 ---
 
 Agents that write application code against a generated client need two answers again and again: which generated function calls an endpoint, and how to call it in this language. tsurara answers both from the definition and the code it generated, through a CLI that prints JSON and an MCP server.
@@ -50,7 +50,7 @@ Clients that read the same `mcpServers` format (Cursor's `.cursor/mcp.json`, Win
 
 `tsurara init --agents` writes the same rules, briefly, into `AGENTS.md` (or `CLAUDE.md` when the project only has that), between `<!-- tsurara:start -->` and `<!-- tsurara:end -->`; running it again replaces that section.
 
-[llms.txt](https://github.com/tsurara-openapi/tsurara/blob/c5cc557cdb42c8f28966541163492b2cf79bd296/llms.txt) indexes the documentation for language models, and [llms-full.txt](https://github.com/tsurara-openapi/tsurara/blob/c5cc557cdb42c8f28966541163492b2cf79bd296/llms-full.txt) holds all of it in one file.
+[llms.txt](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/llms.txt) indexes the documentation for language models, and [llms-full.txt](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/llms-full.txt) holds all of it in one file.
 
 ## The CLI
 
@@ -65,7 +65,7 @@ tsurara generate --format json
 tsurara check --format json
 ```
 
-`--target` is required when the configuration has several targets. The JSON of `generate` and `check` follows [spec/cli-output.schema.json](https://github.com/tsurara-openapi/tsurara/blob/c5cc557cdb42c8f28966541163492b2cf79bd296/spec/cli-output.schema.json).
+`--target` is required when the configuration has several targets. The JSON of `generate` and `check` follows [spec/cli-output.schema.json](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/spec/cli-output.schema.json).
 
 ## Call examples
 

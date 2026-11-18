@@ -1,7 +1,7 @@
 ---
 title: "编程智能体"
 sourcePath: docs/guide/ai.md
-sourceHash: bda3aa0b3010
+sourceHash: 2a037fd06058
 ---
 
 基于生成的客户端编写应用代码的智能体会反复需要两个答案：哪个生成的函数调用某个端点，以及在这种语言中如何调用它。tsurara 根据定义和它生成的代码回答这两个问题，途径是一个输出 JSON 的 CLI 和一个 MCP 服务器。
@@ -50,7 +50,7 @@ tsurara 的仓库同时也是一个注册该服务器的 Claude Code 插件（`.
 
 `tsurara init --agents` 会把同样的规则简要地写入 `AGENTS.md`（项目中只有 `CLAUDE.md` 时则写入它），位于 `<!-- tsurara:start -->` 和 `<!-- tsurara:end -->` 之间；再次运行会替换这一部分。
 
-[llms.txt](https://github.com/tsurara-openapi/tsurara/blob/c5cc557cdb42c8f28966541163492b2cf79bd296/llms.txt) 为语言模型索引了文档，[llms-full.txt](https://github.com/tsurara-openapi/tsurara/blob/c5cc557cdb42c8f28966541163492b2cf79bd296/llms-full.txt) 则把全部文档放在一个文件中。
+[llms.txt](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/llms.txt) 为语言模型索引了文档，[llms-full.txt](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/llms-full.txt) 则把全部文档放在一个文件中。
 
 ## CLI {#the-cli}
 
@@ -65,7 +65,7 @@ tsurara generate --format json
 tsurara check --format json
 ```
 
-配置中有多个目标时需要 `--target`。`generate` 和 `check` 的 JSON 遵循 [spec/cli-output.schema.json](https://github.com/tsurara-openapi/tsurara/blob/c5cc557cdb42c8f28966541163492b2cf79bd296/spec/cli-output.schema.json)。
+配置中有多个目标时需要 `--target`。`generate` 和 `check` 的 JSON 遵循 [spec/cli-output.schema.json](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/spec/cli-output.schema.json)。
 
 ## 调用示例 {#call-examples}
 

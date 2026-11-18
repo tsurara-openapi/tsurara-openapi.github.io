@@ -1,7 +1,7 @@
 ---
 title: "tsurara design"
 sourcePath: docs/design.md
-sourceHash: faa01e846180
+sourceHash: 7153d85fc480
 ---
 
 This document describes the design of tsurara, a tool that generates TypeScript types and API call functions from OpenAPI definitions.
@@ -15,9 +15,7 @@ tsurara is being restructured to generate many languages, not only TypeScript. T
 
 There is no de facto standard tool for generating TypeScript from OpenAPI. The established ones generate wrong types from complex schemas, slow down type checking on large definitions, and put serialization into generated code, among other problems (chapter 3); tsurara exists because of those problems in the output, not because of the state of other projects.
 
-As of November 2026: openapi-typescript, whose structure is close to ideal, was put into maintenance mode by its maintainer on 2026-09-19 and will not be updated ([issue 2874](https://github.com/openapi-ts/openapi-typescript/issues/2874)); its 2026 roadmap of 2025-12-29 had already moved openapi-fetch and openapi-react-query to maintenance ([discussion 2559](https://github.com/openapi-ts/openapi-typescript/discussions/2559)). hey-api (`@hey-api/openapi-ts`), whose types are close to ideal, released about weekly until 0.99.0 on 2026-06-22 and has published only `next` prereleases since (the npm registry, checked 2026-11-11).
-
-tsurara is built to replace them. The generator is written in Rust and shipped as a single binary, and the runtime library used by generated code is shipped as the npm package `@tsurara/client`.
+The generator is written in Rust and shipped as a single binary, and the runtime library used by generated code is shipped as the npm package `@tsurara/client`.
 
 ## 2. Requirements
 
@@ -32,7 +30,7 @@ tsurara is built to replace them. The generator is written in Rust and shipped a
 | R7 | Generate a call function per operation, not just types |
 | R8 | Generate other languages from the same definition, each with types first and then call functions and a runtime library (chapter 18) |
 
-R7 means tsurara does not use the approach of inferring types through a generic function such as openapi-fetch's `client.GET('/pet/{id}', ...)`. That approach makes inference heavy, and it is hard to extract the return type. tsurara generates one function per operation with concrete parameter and return types.
+R7 means tsurara does not use the approach of inferring types through a generic function such as `client.GET('/pet/{id}', ...)`. That approach makes inference heavy, and it is hard to extract the return type. tsurara generates one function per operation with concrete parameter and return types.
 
 ## 3. Problems with existing tools and tsurara's approach
 

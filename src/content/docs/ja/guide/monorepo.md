@@ -1,10 +1,10 @@
 ---
 title: "モノレポ"
 sourcePath: docs/guide/monorepo.md
-sourceHash: 671b93f91d5a
+sourceHash: a0a97640b239
 ---
 
-共有パッケージに一度だけ生成し、各アプリはそれをimportします。[examples/pnpm-monorepo](https://github.com/tsurara-openapi/tsurara/tree/c5cc557cdb42c8f28966541163492b2cf79bd296/examples/pnpm-monorepo)はCIでテストしている動く構成で、ViteのアプリとNodeのアプリが `@acme/openapi` を共有しています。
+共有パッケージに一度だけ生成し、各アプリはそれをimportします。[examples/pnpm-monorepo](https://github.com/tsurara-openapi/tsurara/tree/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/examples/pnpm-monorepo)はCIでテストしている動く構成で、ViteのアプリとNodeのアプリが `@acme/openapi` を共有しています。
 
 ```
 packages/openapi/                 @acme/openapi

@@ -1,7 +1,7 @@
 ---
 title: "Plugins"
 sourcePath: docs/guide/plugins.md
-sourceHash: b6052c1d57c8
+sourceHash: 82eef03caa8c
 ---
 
 Hooks change what tsurara generates (see [Configuration](../configuration/#hooks)). The `extend` hook adds files next to the generated code: hooks for a data-fetching library, a client facade, documentation. It receives the names tsurara chose, so the added files refer to generated code without re-deriving names that collisions, reserved words and `naming.overrides` change.
@@ -121,7 +121,7 @@ export default definePlugin({
 });
 ```
 
-- The module runs with Node 22.18 or later (type stripping), in the directory of the configuration; install `@tsurara/plugin` there. `tsurara init --plugin` writes this skeleton, and [examples/plugin-swr](https://github.com/tsurara-openapi/tsurara/blob/c5cc557cdb42c8f28966541163492b2cf79bd296/examples/plugin-swr/tsurara.plugin.ts) writes an SWR hook per read operation.
+- The module runs with Node 22.18 or later (type stripping), in the directory of the configuration; install `@tsurara/plugin` there. `tsurara init --plugin` writes this skeleton, and [examples/plugin-swr](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/examples/plugin-swr/tsurara.plugin.ts) writes an SWR hook per read operation.
 - Stages: `transformDocument(document)`, `transformModel(model)`, `extend(input)` and `transformFiles(files)`; each returns its output, and may be async. Plugin modules run after the hooks of each stage.
 - `ts.file(path, options)` collects imports: `import(export)` and `importType(export)` take entries of the manifest and write specifiers with the target's import extension; `importFrom`, `importTypeFrom` and `importDefault` take packages; `render(marker)` writes the file.
 - Tests: `runPlugin(modulePath, { definition })` from `@tsurara/plugin/testing` runs tsurara (`TSURARA_BIN` or `tsurara` on the PATH) and returns the files by path.
@@ -133,8 +133,8 @@ The same session runs plugins written with the other SDKs; `runtime` is the comm
 
 | Language | SDK | Configuration |
 |---|---|---|
-| Python | `tsurara-plugin` ([packages/plugin-python](https://github.com/tsurara-openapi/tsurara/blob/c5cc557cdb42c8f28966541163492b2cf79bd296/packages/plugin-python/README.md)) | `{ module: ./plugin.py, runtime: [python, -m, tsurara_plugin] }` |
-| Go | `github.com/tsurara-openapi/tsurara/packages/plugin-go` ([packages/plugin-go](https://github.com/tsurara-openapi/tsurara/blob/c5cc557cdb42c8f28966541163492b2cf79bd296/packages/plugin-go/README.md)) | `{ module: ./plugin, runtime: [go, -C, ./plugin, run, .] }`, or a built binary |
+| Python | `tsurara-plugin` ([packages/plugin-python](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/packages/plugin-python/README.md)) | `{ module: ./plugin.py, runtime: [python, -m, tsurara_plugin] }` |
+| Go | `github.com/tsurara-openapi/tsurara/packages/plugin-go` ([packages/plugin-go](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/packages/plugin-go/README.md)) | `{ module: ./plugin, runtime: [go, -C, ./plugin, run, .] }`, or a built binary |
 | Rust | the `tsurara-plugin` crate | `{ module: ./plugin/Cargo.toml, runtime: [cargo, run, --quiet, --manifest-path] }`, or a built binary |
 
 Python and Go get their types of the model and the manifest from tsurara itself (generated from `spec/plugin-protocol.schema.json` with the Python and Go backends); the Rust crate uses the Rust types. Python's `PyFile` and Go's `NewFile` write files with imports (Go's formatted with `go/format`). `transformDocument` and `transformModel` take and return JSON in these SDKs, so nothing a newer tsurara adds is lost. The same plugin written with each SDK produces the same files (`crates/tsurara-cli/tests/plugin_sdks.rs`).

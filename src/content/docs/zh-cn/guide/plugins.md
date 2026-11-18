@@ -1,7 +1,7 @@
 ---
 title: "插件"
 sourcePath: docs/guide/plugins.md
-sourceHash: b6052c1d57c8
+sourceHash: 82eef03caa8c
 ---
 
 钩子可以改变 tsurara 生成的内容（参见[配置](../configuration/#hooks)）。`extend` 钩子会在生成的代码旁边添加文件：数据获取库的 hook、客户端门面、文档等。它会收到 tsurara 选定的名称，因此添加的文件引用生成的代码时，无需重新推导那些可能因冲突、保留字和 `naming.overrides` 而改变的名称。
@@ -121,7 +121,7 @@ export default definePlugin({
 });
 ```
 
-- 模块在 Node 22.18 或更高版本（类型剥离）下运行，工作目录为配置文件所在的目录；请在那里安装 `@tsurara/plugin`。`tsurara init --plugin` 会写入这个骨架，[examples/plugin-swr](https://github.com/tsurara-openapi/tsurara/blob/c5cc557cdb42c8f28966541163492b2cf79bd296/examples/plugin-swr/tsurara.plugin.ts) 会为每个读取操作写入一个 SWR hook。
+- 模块在 Node 22.18 或更高版本（类型剥离）下运行，工作目录为配置文件所在的目录；请在那里安装 `@tsurara/plugin`。`tsurara init --plugin` 会写入这个骨架，[examples/plugin-swr](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/examples/plugin-swr/tsurara.plugin.ts) 会为每个读取操作写入一个 SWR hook。
 - 阶段：`transformDocument(document)`、`transformModel(model)`、`extend(input)` 和 `transformFiles(files)`；每个阶段返回其输出，并且可以是异步的。在每个阶段中，插件模块在钩子之后运行。
 - `ts.file(path, options)` 收集导入：`import(export)` 和 `importType(export)` 接受清单中的条目，并写出带目标导入扩展名的说明符；`importFrom`、`importTypeFrom` 和 `importDefault` 接受包；`render(marker)` 写出文件。
 - 测试：`@tsurara/plugin/testing` 中的 `runPlugin(modulePath, { definition })` 会运行 tsurara（`TSURARA_BIN` 或 PATH 上的 `tsurara`），并按路径返回文件。
@@ -133,8 +133,8 @@ export default definePlugin({
 
 | 语言 | SDK | 配置 |
 |---|---|---|
-| Python | `tsurara-plugin`（[packages/plugin-python](https://github.com/tsurara-openapi/tsurara/blob/c5cc557cdb42c8f28966541163492b2cf79bd296/packages/plugin-python/README.md)） | `{ module: ./plugin.py, runtime: [python, -m, tsurara_plugin] }` |
-| Go | `github.com/tsurara-openapi/tsurara/packages/plugin-go`（[packages/plugin-go](https://github.com/tsurara-openapi/tsurara/blob/c5cc557cdb42c8f28966541163492b2cf79bd296/packages/plugin-go/README.md)） | `{ module: ./plugin, runtime: [go, -C, ./plugin, run, .] }`，或构建好的二进制文件 |
+| Python | `tsurara-plugin`（[packages/plugin-python](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/packages/plugin-python/README.md)） | `{ module: ./plugin.py, runtime: [python, -m, tsurara_plugin] }` |
+| Go | `github.com/tsurara-openapi/tsurara/packages/plugin-go`（[packages/plugin-go](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/packages/plugin-go/README.md)） | `{ module: ./plugin, runtime: [go, -C, ./plugin, run, .] }`，或构建好的二进制文件 |
 | Rust | `tsurara-plugin` crate | `{ module: ./plugin/Cargo.toml, runtime: [cargo, run, --quiet, --manifest-path] }`，或构建好的二进制文件 |
 
 Python 和 Go 的模型与清单类型由 tsurara 自身生成（使用 Python 和 Go 后端，从 `spec/plugin-protocol.schema.json` 生成）；Rust crate 使用 Rust 类型。Python 的 `PyFile` 和 Go 的 `NewFile` 会写出带导入的文件（Go 的文件用 `go/format` 格式化）。在这些 SDK 中，`transformDocument` 和 `transformModel` 接收并返回 JSON，因此新版 tsurara 添加的内容不会丢失。用各个 SDK 编写的同一个插件会生成相同的文件（`crates/tsurara-cli/tests/plugin_sdks.rs`）。

@@ -1,7 +1,7 @@
 ---
 title: "CLI"
 sourcePath: docs/guide/cli.md
-sourceHash: 40cda569f3ee
+sourceHash: 2712fc267038
 ---
 
 | コマンド | |
@@ -12,6 +12,6 @@ sourceHash: 40cda569f3ee
 | `tsurara mcp` | コーディングエージェント向けのMCPサーバー（[ガイド](../ai/)） |
 | `tsurara inspect operations` / `operation <id>` / `schema <name>` / `warning <code>` | ファイルを書き込まずに、操作の一覧、生成された関数と呼び出し例、スキーマから生成された型、警告の意味を調べます |
 
-`generate` と `check` は、スクリプトやコーディングエージェント向けに `--format json` を受け付けます（[spec/cli-output.schema.json](https://github.com/tsurara-openapi/tsurara/blob/c5cc557cdb42c8f28966541163492b2cf79bd296/spec/cli-output.schema.json)）。`inspect` は `--format json|text` と `--target` を受け付けます。
+`generate` と `check` は、スクリプトやコーディングエージェント向けに `--format json` を受け付けます（[spec/cli-output.schema.json](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/spec/cli-output.schema.json)）。`inspect` は `--format json|text` と `--target` を受け付けます。
 
 `generate` は内容が変わったファイルだけを書き込み、出力先ディレクトリにある、tsuraraの生成ファイルの目印で始まる古いファイルを削除します。

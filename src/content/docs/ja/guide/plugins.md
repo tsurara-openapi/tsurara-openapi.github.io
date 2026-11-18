@@ -1,7 +1,7 @@
 ---
 title: "プラグイン"
 sourcePath: docs/guide/plugins.md
-sourceHash: b6052c1d57c8
+sourceHash: 82eef03caa8c
 ---
 
 フックは、tsuraraが生成する内容を変えます（[設定](../configuration/#hooks)を参照）。`extend` フックは生成コードの隣にファイルを追加します。データ取得ライブラリ向けのフック、クライアントのファサード、ドキュメントなどです。このフックはtsuraraが選んだ名前を受け取るので、追加するファイルは生成コードを参照するときに名前を導き直す必要がありません。名前は衝突、予約語、`naming.overrides` によって変わることがあります。
@@ -121,7 +121,7 @@ export default definePlugin({
 });
 ```
 
-- モジュールはNode 22.18以降（型ストリッピング）で、設定ファイルのあるディレクトリで実行されます。`@tsurara/plugin` はそこにインストールしてください。`tsurara init --plugin` がこのひな形を書き込みます。[examples/plugin-swr](https://github.com/tsurara-openapi/tsurara/blob/c5cc557cdb42c8f28966541163492b2cf79bd296/examples/plugin-swr/tsurara.plugin.ts)は、読み取りの操作ごとにSWRのフックを書き出す例です。
+- モジュールはNode 22.18以降（型ストリッピング）で、設定ファイルのあるディレクトリで実行されます。`@tsurara/plugin` はそこにインストールしてください。`tsurara init --plugin` がこのひな形を書き込みます。[examples/plugin-swr](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/examples/plugin-swr/tsurara.plugin.ts)は、読み取りの操作ごとにSWRのフックを書き出す例です。
 - 段階は `transformDocument(document)`、`transformModel(model)`、`extend(input)`、`transformFiles(files)` です。それぞれ出力を返し、非同期にもできます。プラグインモジュールは、各段階でフックのあとに実行されます。
 - `ts.file(path, options)` はimportを集めます。`import(export)` と `importType(export)` はマニフェストのエントリを受け取り、ターゲットのimportの拡張子を付けた指定子を書きます。`importFrom`、`importTypeFrom`、`importDefault` はパッケージを受け取ります。`render(marker)` がファイルを書き出します。
 - テスト：`@tsurara/plugin/testing` の `runPlugin(modulePath, { definition })` はtsurara（`TSURARA_BIN` か、PATH上の `tsurara`）を実行し、ファイルをパスごとに返します。
@@ -133,8 +133,8 @@ export default definePlugin({
 
 | 言語 | SDK | 設定 |
 |---|---|---|
-| Python | `tsurara-plugin`（[packages/plugin-python](https://github.com/tsurara-openapi/tsurara/blob/c5cc557cdb42c8f28966541163492b2cf79bd296/packages/plugin-python/README.md)） | `{ module: ./plugin.py, runtime: [python, -m, tsurara_plugin] }` |
-| Go | `github.com/tsurara-openapi/tsurara/packages/plugin-go`（[packages/plugin-go](https://github.com/tsurara-openapi/tsurara/blob/c5cc557cdb42c8f28966541163492b2cf79bd296/packages/plugin-go/README.md)） | `{ module: ./plugin, runtime: [go, -C, ./plugin, run, .] }`、またはビルド済みのバイナリ |
+| Python | `tsurara-plugin`（[packages/plugin-python](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/packages/plugin-python/README.md)） | `{ module: ./plugin.py, runtime: [python, -m, tsurara_plugin] }` |
+| Go | `github.com/tsurara-openapi/tsurara/packages/plugin-go`（[packages/plugin-go](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/packages/plugin-go/README.md)） | `{ module: ./plugin, runtime: [go, -C, ./plugin, run, .] }`、またはビルド済みのバイナリ |
 | Rust | `tsurara-plugin` クレート | `{ module: ./plugin/Cargo.toml, runtime: [cargo, run, --quiet, --manifest-path] }`、またはビルド済みのバイナリ |
 
 PythonとGoのモデルとマニフェストの型は、tsurara自身が生成しています（PythonとGoのバックエンドで `spec/plugin-protocol.schema.json` から生成）。RustのクレートはRustの型を使います。Pythonの `PyFile` とGoの `NewFile` は、importを含むファイルを書き出します（Goのものは `go/format` で整形されます）。これらのSDKでは `transformDocument` と `transformModel` がJSONを受け取って返すので、新しいtsuraraが追加した内容も失われません。同じプラグインをどのSDKで書いても、同じファイルが生成されます（`crates/tsurara-cli/tests/plugin_sdks.rs`）。
