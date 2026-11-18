@@ -15,9 +15,7 @@ tsurara 正在重构，以生成多种语言，而不仅仅是 TypeScript。目�
 
 从 OpenAPI 生成 TypeScript 的工具中，没有事实上的标准。现有的成熟工具存在一些问题：从复杂的 schema 生成错误的类型、在大型定义上拖慢类型检查、把序列化写进生成的代码等（第 3 章）；tsurara 之所以存在，是因为输出中的这些问题，而不是因为其他项目的状况。
 
-截至 2026 年 11 月：结构接近理想的 openapi-typescript 已于 2026-09-19 被其维护者转入维护模式，今后不再更新（[issue 2874](https://github.com/openapi-ts/openapi-typescript/issues/2874)）；它在 2025-12-29 发布的 2026 年路线图中，已经把 openapi-fetch 和 openapi-react-query 转入维护模式（[discussion 2559](https://github.com/openapi-ts/openapi-typescript/discussions/2559)）。类型接近理想的 hey-api（`@hey-api/openapi-ts`）在 2026-06-22 发布 0.99.0 之前大约每周发布一次，此后只发布了 `next` 预发布版本（npm registry，2026-11-11 确认）。
-
-tsurara 就是为了取代它们而构建的。生成器用 Rust 编写，以单个二进制文件发布；生成的代码所使用的运行时库以 npm 包 `@tsurara/client` 发布。
+生成器用 Rust 编写，以单个二进制文件发布；生成的代码所使用的运行时库以 npm 包 `@tsurara/client` 发布。
 
 ## 2. 需求 {#2-requirements}
 
@@ -32,7 +30,7 @@ tsurara 就是为了取代它们而构建的。生成器用 Rust 编写，以单
 | R7 | 不仅生成类型，还为每个操作生成调用函数 |
 | R8 | 从同一份定义生成其他语言，每种语言都先有类型，再有调用函数和运行时库（第 18 章） |
 
-R7 意味着 tsurara 不采用通过 openapi-fetch 的 `client.GET('/pet/{id}', ...)` 这类泛型函数推断类型的方式。这种方式会让推断变得沉重，也很难取出返回值的类型。tsurara 为每个操作生成一个具有具体参数和返回值类型的函数。
+R7 意味着 tsurara 不采用通过 `client.GET('/pet/{id}', ...)` 这类泛型函数推断类型的方式。这种方式会让推断变得沉重，也很难取出返回值的类型。tsurara 为每个操作生成一个具有具体参数和返回值类型的函数。
 
 ## 3. 现有工具的问题与 tsurara 的做法 {#3-problems-with-existing-tools-and-tsuraras-approach}
 
