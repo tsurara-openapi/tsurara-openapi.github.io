@@ -55,7 +55,6 @@ export default defineConfig({
             'guide/react',
             'guide/mocks',
             'guide/monorepo',
-            'guide/migration',
           ],
         },
         {
