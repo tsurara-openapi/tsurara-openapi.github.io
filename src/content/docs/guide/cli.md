@@ -12,6 +12,6 @@ sourceHash: 2712fc267038
 | `tsurara mcp` | An MCP server for coding agents ([guide](../ai/)) |
 | `tsurara inspect operations` / `operation <id>` / `schema <name>` / `warning <code>` | Look up operations, the generated function and a call example, a schema's generated type, or what a warning means, without writing files |
 
-`generate` and `check` take `--format json` for scripts and coding agents ([spec/cli-output.schema.json](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/spec/cli-output.schema.json)); `inspect` takes `--format json|text` and `--target`.
+`generate` and `check` take `--format json` for scripts and coding agents ([spec/cli-output.schema.json](https://github.com/tsurara-openapi/tsurara/blob/170cabec56cf573944620f7d2ef05eb2b845d2bb/spec/cli-output.schema.json)); `inspect` takes `--format json|text` and `--target`.
 
 `generate` writes only the files whose content changed, and deletes stale files in the output directory that start with tsurara's generated-file marker.

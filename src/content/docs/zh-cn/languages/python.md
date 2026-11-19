@@ -1,12 +1,12 @@
 ---
 title: "Python"
 sourcePath: docs/languages/python.md
-sourceHash: 4b9a4fa99df1
+sourceHash: 5b0949ae2dbb
 ---
 
 Python 后端（`language: python`，crate `tsurara-lang-python`）生成 dataclass、枚举和类型别名，并为以通用方式转换 JSON 的运行时附带 TypeDef（design.md 18.7）。生成的代码使用运行时 `tsurara-client`（`runtimes/python`）：基于 httpx 的同步和异步客户端、Result，以及 TypeDef 编解码器；它通过了 `spec/` 中的一致性测试向量。每个操作都会生成一个调用函数。
 
-生成的代码需要 Python 3.11 或更高版本（design.md 18.16，Q2），并以 Python 3.11 为目标用 pyright 检查。
+生成的代码需要 Python 3.11 或更高版本（design.md 18.15，Q2），并以 Python 3.11 为目标用 pyright 检查。
 
 ## 快速开始 {#quick-start}
 
@@ -63,7 +63,7 @@ with Client("https://petstore3.swagger.io/api/v3") as client:
 | 可空属性 | `name: T \| None` |
 | 可选且可空 | `name: T \| None \| Missing = MISSING`（`_support.py`）；只有这里区分“缺失”和 `null`（Q3） |
 | `additionalProperties` | `additional_properties: dict[str, T] = field(default_factory=dict)` |
-| 枚举 | `class Status(Enum)`，成员名由值生成（`IT_S`、`VALUE_1`）；在接收值的位置，类型注解为 `Status \| str`（或 `\| int`） |
+| 枚举 | `class Status(Enum)`，成员名由值生成（`IT_S`、`VALUE_1`），定义中有 `x-enum-varnames` 或 `x-enumNames` 时则由它们生成；在接收值的位置，类型注解为 `Status \| str`（或 `\| int`） |
 | 开放的带标签联合类型 | 在接收值的位置为 `Cat \| Dog \| dict[str, Any]`：未列出的判别值会保留 JSON 对象 |
 | 只有 `additionalProperties` 的对象 | `dict[str, T]` |
 | `oneOf`、`anyOf`、类型数组 | `Name: TypeAlias = "A \| B"` |

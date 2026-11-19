@@ -1,7 +1,7 @@
 ---
 title: "配置"
 sourcePath: docs/guide/configuration.md
-sourceHash: c1fc416b2bd0
+sourceHash: 0b600e1cef10
 ---
 
 tsurara 从当前目录或最近的父目录读取 `tsurara.config.yaml`（或 `.yml`、`.json`、`.toml`），也可以用 `--config` 指定文件。npm 包 `tsurara` 中包含 `schema/tsurara.config.schema.json`，它描述了所有的键，可用于编辑器补全：
@@ -48,12 +48,16 @@ typescript:
   importExtension: ts
   layout: split
   enumStyle: union
+  bodilessResponses: discard
   typeMappings:
     uuid: { type: "Brand<'Uuid'>", import: { from: ./brand.ts, name: Brand } }
   overrides:
     "#/components/schemas/Id": string
   naming:
     schemaCase: preserve
+    functionCase: preserve
+    typePrefix: Api
+    enumKeyCase: preserve
     overrides:
       "#/components/schemas/Error": ApiErrorBody
 ```
@@ -63,6 +67,7 @@ typescript:
 | `importExtension` | `js` | 生成代码中相对导入的扩展名：`js`（用于 `tsc` 构建和打包工具）、`ts`（用 Node 的类型剥离运行；使用方需要 `allowImportingTsExtensions` 或 `rewriteRelativeImportExtensions`），或 `none`（Metro 和部分打包工具） |
 | `layout` | `split` | `split`：每个操作（`operations/getPet.ts`）和每个 schema（`schemas/Pet.ts`）各一个文件；`tags`：每个标签一个文件；`single`：单个文件 |
 | `enumStyle` | `union` | `union`：字符串字面量联合类型；`const`：同时输出一个以值为键的对象（`Status.available`），类型由该对象推导 |
+| `bodilessResponses` | `discard` | 定义中没有内容的错误响应（4xx、5xx，以及与成功状态码并列的 `default`）的响应体如何处理：`discard` 丢弃它，错误为 `undefined`；`read` 读取带有 Content-Type 到达的响应体（与 `auto` 相同），错误为 `unknown`。不适用于 `HEAD` |
 | `aggregateMaps` | `false` | 同时输出 `paths.ts` 和 `operations.ts`，即包含所有操作的映射，供通用客户端使用 |
 | `clientModule` | `@tsurara/client` | 生成的代码从该模块导入运行时 |
 | `mocks` | | `msw` 或 `fetch`：同时在 `mocks/` 下输出 Mock 工厂函数（`mockPet()`，来自定义中的示例值）和每个操作的请求处理器，形式为 MSW 处理器或 `@tsurara/client/testing` 中 `mockFetch` 的路由（[Mock](../mocks/)）。其他文件不会导入它们；不使用该选项时，任何文件都不会提及 `msw` |
@@ -73,6 +78,9 @@ typescript:
 | `typeMappings` | | 每个 `format`（`uuid`、`date` 等）对应的类型：一个类型表达式，或 `{ type, import: { from, name } }`。`from` 中以 `.` 开头的路径相对于本文件。映射不能改变 JSON 解析的结果：为 `date-time` 指定 `Date`、为 `int64` 指定 `bigint` 都会报错 |
 | `overrides` | | 按 JSON Pointer 指定的类型，写法与 `typeMappings` 相同 |
 | `naming.schemaCase` | `preserve` | `preserve` 保留可作为标识符的组件名；`pascal` 将所有类型名转换为 PascalCase |
+| `naming.typePrefix` | | 加在 schema 类型名之前：`Api` 会得到 `ApiPet`（以及 `ApiPetWritable`）。从操作派生的类型（`GetPetResult`）和由 `naming.overrides` 固定的名称保持不变 |
+| `naming.enumKeyCase` | `preserve` | `enumStyle: const` 对象的键：`preserve` 原样写出成员名（`x-enum-varnames`、`x-enumNames`）或值；`constant` 得到 `PAYMENT_PENDING`，`pascal` 得到 `PaymentPending`，`camel` 得到 `paymentPending`。变得相同的键会编号（`A_B`、`A_B_2`） |
+| `naming.functionCase` | `preserve` | `preserve` 将可作为标识符的操作 ID 直接用作函数名（`ListPets`、`get_pet`）；`camel` 将所有函数名转换为 camelCase（`listPets`、`getPet`） |
 | `naming.overrides` | | 按 JSON Pointer 指定的最终 TypeScript 标识符，原样使用 |
 
 `typeMappings`、`overrides` 和 `x-tsurara-type` 中的类型必须是类型表达式（名称、类型参数、数组、`|`、`&`、字面量）；其他内容在配置中会报错，在定义中会被忽略并给出警告。

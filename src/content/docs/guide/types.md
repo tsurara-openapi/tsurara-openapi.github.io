@@ -1,7 +1,7 @@
 ---
 title: "Types"
 sourcePath: docs/guide/types.md
-sourceHash: ab8eb494164b
+sourceHash: 7a7d7e6677c5
 ---
 
 How schemas become TypeScript types. The rules are fixed and each row is a test (design.md 6.4); Python has its own table in [docs/languages/python.md](../../languages/python/).
@@ -10,7 +10,7 @@ How schemas become TypeScript types. The rules are fixed and each row is a test 
 |---|---|
 | `type: string`, `integer`, `number`, `boolean`, `null` | `string`, `number`, `number`, `boolean`, `null` |
 | `format: date-time`, `uuid`, `int64`, ... | The base type (`string`, `number`); the format goes in JSDoc. `typeMappings` can name another type that JSON parsing produces (a branded string, for example) |
-| `enum` | A union of literals (`'a' \| 'b'`); `enumStyle: const` adds an object of the values |
+| `enum` | A union of literals (`'a' \| 'b'`); `enumStyle: const` adds an object of the values, keyed by `x-enum-varnames` or `x-enumNames` when the definition has them, in the case `naming.enumKeyCase` asks for |
 | `const` | A literal type |
 | `nullable: true` (3.0), `type: [string, "null"]` (3.1) | `string \| null` |
 | `type: object` with `properties` | An object type; properties not in `required` are optional (`a?: T`) |

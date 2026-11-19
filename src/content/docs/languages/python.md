@@ -1,12 +1,12 @@
 ---
 title: "Python"
 sourcePath: docs/languages/python.md
-sourceHash: 4b9a4fa99df1
+sourceHash: 5b0949ae2dbb
 ---
 
 The Python backend (`language: python`, crate `tsurara-lang-python`) generates dataclasses, enums and type aliases, with TypeDefs for a runtime that converts JSON generically (design.md 18.7). Generated code uses the runtime `tsurara-client` (`runtimes/python`): sync and async clients over httpx, Results, and the TypeDef codec; it passes the conformance vectors in `spec/`. Each operation gets a call function.
 
-Generated code requires Python 3.11 or later (design.md 18.16, Q2) and is checked with pyright as Python 3.11.
+Generated code requires Python 3.11 or later (design.md 18.15, Q2) and is checked with pyright as Python 3.11.
 
 ## Quick start
 
@@ -63,7 +63,7 @@ with Client("https://petstore3.swagger.io/api/v3") as client:
 | Nullable property | `name: T \| None` |
 | Optional and nullable | `name: T \| None \| Missing = MISSING` (`_support.py`); missing and `null` differ only here (Q3) |
 | `additionalProperties` | `additional_properties: dict[str, T] = field(default_factory=dict)` |
-| Enum | `class Status(Enum)` with members named from the values (`IT_S`, `VALUE_1`); at a received site the annotation is `Status \| str` (or `\| int`) |
+| Enum | `class Status(Enum)` with members named from the values (`IT_S`, `VALUE_1`), or from `x-enum-varnames` or `x-enumNames` when the definition has them; at a received site the annotation is `Status \| str` (or `\| int`) |
 | Open tagged union | At a received site, `Cat \| Dog \| dict[str, Any]`: an unlisted discriminator keeps the JSON object |
 | Object with only `additionalProperties` | `dict[str, T]` |
 | `oneOf`, `anyOf`, type arrays | `Name: TypeAlias = "A \| B"` |

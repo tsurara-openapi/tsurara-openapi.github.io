@@ -1,7 +1,7 @@
 ---
 title: "Rust"
 sourcePath: docs/languages/rust.md
-sourceHash: f5fc7d1552f6
+sourceHash: 6f0956554b27
 ---
 
 Rustバックエンド（`language: rust`、クレート `tsurara-lang-rust`）は、serdeのderiveを付けたstructとenum、そしてランタイムのクレート `tsurara-client`（`runtimes/rust`）を使う非同期の呼び出し関数を生成します。このページでは対応関係を説明します。このバックエンドは実験的です。`tsurara generate` もそう表示し、出力は変わることがあります。
@@ -40,7 +40,7 @@ Rustバックエンド（`language: rust`、クレート `tsurara-lang-rust`）�
 | nullを許すプロパティ | `pub name: Option<T>`（`null` は `None`。値がない場合も受け入れる、より広い型です） |
 | 省略可能かつnullを許す | `#[serde(default, skip_serializing_if = "Nullable::is_missing")] pub name: tsurara_client::Nullable<T>`。`Missing`、`Null`、`Value(T)` からなるenumです（Q3） |
 | `additionalProperties` | `#[serde(flatten)] pub additional_properties: BTreeMap<String, T>` |
-| 文字列のenum | `pub enum Status { #[serde(rename = "available")] Available, ... }`。値を受け取る箇所では `#[serde(untagged)] Unknown(String)` も加わり、挙がっていない値を保持して、そのまま書き戻します |
+| 文字列のenum | `pub enum Status { #[serde(rename = "available")] Available, ... }`。定義に `x-enum-varnames` か `x-enumNames` があれば、バリアントの名前はそこから作ります。値を受け取る箇所では `#[serde(untagged)] Unknown(String)` も加わり、挙がっていない値を保持して、そのまま書き戻します |
 | 整数または混在のenum | `pub type Level = i64;` と `pub const LEVEL_1: Level = 1;` |
 | 判別子付きのunion | `tsurara_client::tagged_union!` を使った `pub enum Pet { Cat(Cat), Dog(Dog) }`。マクロは判別子を読み、オブジェクト全体からメンバーをデコードします（メンバーはタグのフィールドを保持します）。挙がっていない値は `defaultMapping` のメンバーが受け取り、それがなければ値を受け取る箇所では `Unknown(serde_json::Value)` が受け取ります |
 | そのほかのunion（`oneOf`、`anyOf`、型の配列） | `#[serde(untagged)] pub enum Id { Integer(i64), String(String) }`。メンバーは順に試されます。バリアント名はメンバーの型から作ります |

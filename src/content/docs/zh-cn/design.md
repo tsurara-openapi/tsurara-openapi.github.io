@@ -1,7 +1,7 @@
 ---
 title: "设计"
 sourcePath: docs/design.md
-sourceHash: 7153d85fc480
+sourceHash: 6e2c6f2019ac
 ---
 
 本文档描述 tsurara 的设计。tsurara 是一个根据 OpenAPI 定义生成 TypeScript 类型和 API 调用函数的工具。
@@ -197,9 +197,9 @@ Swagger 2.0 定义在交给 tsurara-sem 之前会转换为 OpenAPI 3.0，这样 
 
 任何值都无法满足的组合会变为 `never`。即 `minItems` 大于 `maxItems`，以及 `items: false` 且 `minItems` 超过 `prefixItems` 的个数。
 
-IR 中的元组除了元素类型列表外，还保存必需元素的个数（028 中的工作）。
+IR 中的元组除了元素类型列表外，还保存必需元素的个数。
 
-一个值是否为二进制取决于它出现的位置。在 JSON 中声明为 `type: string` 的值以 JSON 字符串的形式到达，因此即使带有 `contentMediaType: text/html` 或 `format: binary`，它也是 `string`。只有请求或响应体本身（`application/octet-stream` 等）以及 multipart 部分的值才会变为 `Blob | File`。部分的值是指 multipart 请求体 schema 的顶层属性以及其中数组的条目，并会跟随 `$ref`。如果一个具名对象 schema 的所有用途（所有文档中的所有 `$ref` 和判别映射）都是 multipart 请求体，它就以部分值的形式声明，这些请求体引用它。其他任何具名 schema 都按 JSON 值转换，因此无论它在 JSON 中的何处使用，其类型都是正确的。当 multipart 请求体引用这样的 schema 且该 schema 含有二进制部分值时，请求体类型不再引用它，而是把它内联展开，并把这些部分设为 `Blob | File`；具名类型不会改变，也不会输出错误的类型（在 029 中决定）。
+一个值是否为二进制取决于它出现的位置。在 JSON 中声明为 `type: string` 的值以 JSON 字符串的形式到达，因此即使带有 `contentMediaType: text/html` 或 `format: binary`，它也是 `string`。只有请求或响应体本身（`application/octet-stream` 等）以及 multipart 部分的值才会变为 `Blob | File`。部分的值是指 multipart 请求体 schema 的顶层属性以及其中数组的条目，并会跟随 `$ref`。如果一个具名对象 schema 的所有用途（所有文档中的所有 `$ref` 和判别映射）都是 multipart 请求体，它就以部分值的形式声明，这些请求体引用它。其他任何具名 schema 都按 JSON 值转换，因此无论它在 JSON 中的何处使用，其类型都是正确的。当 multipart 请求体引用这样的 schema 且该 schema 含有二进制部分值时，请求体类型不再引用它，而是把它内联展开，并把这些部分设为 `Blob | File`；具名类型不会改变，也不会输出错误的类型。
 
 #### 6.4.1 哪些精确、哪些近似、哪些拒绝 {#641-what-is-exact-what-is-approximated-and-what-is-rejected}
 
@@ -222,7 +222,7 @@ discriminator：当 `oneOf`/`anyOf` 带有判别字段时，每个成员都会�
 
 readOnly/writeOnly：对于带有其中之一的 schema（包括通过引用目标带有的情况），除原类型外还会生成 `PetWritable`。原类型用于响应，并去掉 writeOnly 属性。`Writable` 类型用于请求，并去掉 readOnly 属性。两者都没有的 schema 不会生成 `Writable` 类型。这种拆分可以在配置中关闭，此时会忽略 readOnly/writeOnly，只输出一个类型。
 
-一个 schema 是否带有 readOnly/writeOnly，在整个引用图上判断。对于相互引用（例如 A 引用 B、B 引用 A），会按强连通分量反复计算，直到结果不再变化。检查过程中的临时结果不能被当作最终结果。若以临时结果定论，相互引用另一侧的 readOnly 属性就会残留在请求类型中（030 中的工作）。
+一个 schema 是否带有 readOnly/writeOnly，在整个引用图上判断。对于相互引用（例如 A 引用 B、B 引用 A），会按强连通分量反复计算，直到结果不再变化。检查过程中的临时结果不能被当作最终结果。若以临时结果定论，相互引用另一侧的 readOnly 属性就会残留在请求类型中。
 
 只要给 schema 添加一个 readOnly 属性，引用它的请求一侧的类型名就会从 `X` 变为 `XWritable`。这符合命名规则，但对用户代码来说是破坏性变更（第 14 章）。
 
@@ -238,7 +238,7 @@ readOnly/writeOnly：对于带有其中之一的 schema（包括通过引用目�
 
 与保留字或全局名称冲突的名称会加上后缀 `Model`（`Error` → `ErrorModel`，`Date` → `DateModel`）。如果加了后缀的名称仍与其他名称冲突，则追加 `2`、`3` 等。被避开的冲突会作为警告报告（6.8），并且可以用 `naming.overrides` 把名称固定为其他名称。
 
-当从操作派生的类型名（`{P}Data`、`{P}Responses`、`{P}Errors`、`{P}Result`、`{P}ResponseHeaders`、`{}Def`，以及 webhook 和回调的类型）已被占用（通常是被某个 schema 占用）时，schema 保留其名称，只有这个派生名称让开：在后缀前加上 `Operation`（`ListPetsOperationResult`），若仍被占用则再加编号。函数名和其他派生名称保持不变，因此添加名为 `ListPetsResult` 的 schema 永远不会把函数 `listPets` 变成 `listPets2`。`renamed` 警告会指出双方，`naming.overrides` 可以选择其他名称。这参考了 kubb 的冲突检测（跨种类时使用有语义的后缀，同一种类内使用编号）。最初的策略是报错停止生成；OpenAI 的定义中有十处这样的冲突（`UsageCompletionsResult` 既是一个 schema，又是 `usageCompletions` 的结果），因此在 064 中做了修改。
+当从操作派生的类型名（`{P}Data`、`{P}Responses`、`{P}Errors`、`{P}Result`、`{P}ResponseHeaders`、`{}Def`，以及 webhook 和回调的类型）已被占用（通常是被某个 schema 占用）时，schema 保留其名称，只有这个派生名称让开：在后缀前加上 `Operation`（`ListPetsOperationResult`），若仍被占用则再加编号。函数名和其他派生名称保持不变，因此添加名为 `ListPetsResult` 的 schema 永远不会把函数 `listPets` 变成 `listPets2`。`renamed` 警告会指出双方，`naming.overrides` 可以选择其他名称。最初的策略是报错停止生成；OpenAI 的定义中有十处这样的冲突（`UsageCompletionsResult` 既是一个 schema，又是 `usageCompletions` 的结果），因此做了修改。
 
 关于名称，确定性和稳定性分开考虑。
 
@@ -389,7 +389,7 @@ export function getPetById<Ctx>(
 - 源码在构建时嵌入二进制文件（`tsurara-runtimes`，一个针对 `runtimes/` 的构建脚本，不含测试），因此副本始终与生成器一致。
 - 每个复制的文件都以生成文件标记和一行注明 MIT 许可证的文字开头。过时文件的删除和 `tsurara check` 像对待生成的代码一样覆盖副本：修改会让 `check` 失败，`generate` 会恢复它，取消内置则会删除它。不写入运行时版本标记，`check` 的版本检查也不适用（副本本身就是那个版本）。
 - 只在语言需要的地方修改副本：TypeScript 的相对导入带上导入扩展名；Rust 的 `crate::`、`$crate::` 和 `tsurara_client::` 路径改为 `runtimeCrate`，`#[macro_export]` 宏按路径重新导出，解析 cargo 特性（客户端层仅在有操作时保留，Mock 传输层仅在 `rust.mocks` 时保留，并置于 `cfg(any(test, feature = "mocks"))` 之下），并允许 `clippy::collapsible_if`，因为运行时保持兼容 Rust 1.85；Go 中对运行时和 `tsuraratest` 的导入改为内置后的路径。
-- 不复制第三方依赖：`generate` 会列出它们（Python 为 httpx；Rust 为 serde、serde_json 和 indexmap，有操作时还有 tokio、fastrand、httpdate 和 reqwest，这些也列在 `mod.rs` 中）。TypeScript 和 Go 没有第三方依赖。
+- 不复制第三方依赖：`generate` 会列出它们（Python 为 httpx；Rust 为 serde、serde_json 和 indexmap，有操作时还有 tokio、fastrand、httpdate、encoding_rs 和 reqwest，这些也列在 `mod.rs` 中）。TypeScript 和 Go 没有第三方依赖。
 - 使用 `operations: false` 时，Rust 只复制类型层（18.9）；当没有文件导入运行时，TypeScript 什么都不复制。
 - 每个目标都有自己的副本。不提供供多个目标共享的位置：同一仓库中共享运行时的多个目标更适合使用包。
 
@@ -428,7 +428,9 @@ const api = createClient<{ traceparent?: string }>({
 
 类型参数 `Ctx` 是每次调用时传入的 context 的类型，用于在 SSR 中传递每个请求的追踪 ID 等场景。不使用模块扩充（module augmentation），因此各个应用可以有不同的类型而互不干扰。
 
-`signal`、`headers`、`timeout`、`baseUrl` 和 `context` 可以通过 `RequestOptions` 按调用覆盖。
+`signal`、`headers`、`timeout`、`baseUrl`、`context` 和 `fetchOptions` 可以通过 `RequestOptions` 按调用覆盖。`fetchOptions`（也是客户端选项，单次调用的选项覆盖在客户端的选项之上）会原样传给 `fetch`，例如 `cache`、`credentials` 或 Next.js 的 `next`；方法、请求头、请求体、signal 和重定向的处理仍由客户端决定，中间件可以通过 `req.fetchOptions` 看到它们。
+
+`client.requestRaw(def, input)` 以相同的步骤（请求头、认证、中间件、重定向、到响应为止的超时）发送调用，但返回尚未读取响应体的 `{ kind: 'response', ok, status, documented, response }`，或传输失败：用于直接转发的响应体，或以定义未描述的方式读取的响应体。生成的函数不使用它，`onResult` 也看不到它。
 
 ### 8.2 Result {#82-result}
 
@@ -438,9 +440,9 @@ const api = createClient<{ traceparent?: string }>({
 |---|---|---|---|
 | `success` | true | 返回了定义中的成功状态码 | `status`、`data`、`response` |
 | `http` | false | 返回了错误状态码，或定义中没有的状态码。定义中没有的状态码带有 `documented: false` 和 `error: unknown`。当定义了其他成功状态码时，未定义的 2xx（例如只定义了 200 的操作返回 201）也归入此类 | `status`、`error`、`documented`、`response` |
-| `network` | false | fetch 本身失败（DNS、连接中断、CORS 等） | `cause` |
-| `timeout` | false | 超过了 `timeout` 给定的时间 | `cause` |
-| `aborted` | false | 被调用方的 `signal` 中止 | `cause` |
+| `network` | false | fetch 本身失败（DNS、连接中断、CORS 等），或在读取响应体时连接失败 | `cause`；中断了响应体的读取时还有 `response` |
+| `timeout` | false | 超过了 `timeout` 给定的时间 | `cause`；与 `network` 相同，还有 `response` |
+| `aborted` | false | 被调用方的 `signal` 中止 | `cause`；与 `network` 相同，还有 `response` |
 | `parse` | false | 解析响应体失败，包括 Content-Type 与预期不符的情况 | `cause`、`response`、`contentType` |
 | `unexpected` | false | 中间件等用户代码抛出了异常 | `cause` |
 | `validation` | false | `validate` 在成功响应体或定义中声明的错误响应体中发现了问题（8.7） | `status`、`value`、`issues`、`response` |
@@ -481,8 +483,8 @@ const api = createClient<{ traceparent?: string }>({
 
 所有请求和响应的转换都由 `@tsurara/client` 根据 OperationDef 完成。生成的代码不包含转换逻辑。转换逻辑集中在库中的一个地方，就可以对其整体进行测试。
 
-- 路径与查询：遵循 OpenAPI 的 `style`（form、spaceDelimited、pipeDelimited、deepObject 等）和 `explode`。路径参数缺失，或其值会使整个路径段变为空、`.` 或 `..` 时，会在发送前失败（`kind: 'unexpected'`）：URL 解析会移除点段，否则 `/users/{id}/profile` 中的 `id: '..'` 会调用 `/profile`。值会进行百分号编码（包括 `%`），因此 `%2e` 这样的值会以 `%252e` 发送。路径模板必须以 `/` 开头：它会以文本形式追加到 base URL 后面，因此 `https://api.example.com` 之后的 `@evil.example/x` 或 `:8443/x` 会改变主机或端口。模型会去掉不以 `/` 开头的路径键，并给出 `invalid-definition` 警告（webhook 名称和回调表达式不是路径），所有运行时都会在发送前拒绝这样的 OperationDef（`unexpected`）。
-- 请求体：支持 JSON、`multipart/form-data`、`application/x-www-form-urlencoded` 和二进制。multipart 遵循 `encoding`：数组按元素逐个 `append`，对象用给定的 Content-Type 序列化。
+- 路径与查询：遵循 OpenAPI 的 `style`（form、spaceDelimited、pipeDelimited、deepObject 等）和 `explode`。值为 `null` 的查询参数与缺失的值一样不发送（`in: querystring` 对象中值为 `null` 的成员也一样）：这些风格所依据的 RFC 6570 把 `null` 视为未定义，而 `key=` 会发送 API 可能不接受的空字符串。路径参数缺失，或其值会使整个路径段变为空、`.` 或 `..` 时，会在发送前失败（`kind: 'unexpected'`）：URL 解析会移除点段，否则 `/users/{id}/profile` 中的 `id: '..'` 会调用 `/profile`。值会进行百分号编码（包括 `%`），因此 `%2e` 这样的值会以 `%252e` 发送。路径模板必须以 `/` 开头：它会以文本形式追加到 base URL 后面，因此 `https://api.example.com` 之后的 `@evil.example/x` 或 `:8443/x` 会改变主机或端口。模型会去掉不以 `/` 开头的路径键，并给出 `invalid-definition` 警告（webhook 名称和回调表达式不是路径），所有运行时都会在发送前拒绝这样的 OperationDef（`unexpected`）。
+- 请求体：支持 JSON、`multipart/form-data`、`application/x-www-form-urlencoded` 和二进制。multipart 遵循 `encoding`：数组按元素逐个 `append`，`encoding` 中带有 Content-Type 的对象和数组作为该类型的部分发送。没有 Content-Type 的对象作为以其 JSON 文本为值的字段发送：`FormData` 只有把部分做成文件（带文件名）才能给它加上 Content-Type，而许多服务器会把它当作上传的文件。所有运行时都以相同方式发送。
 - 响应：生成器根据媒体类型决定 `parseAs`，并写入 OperationDef。
 
 下表从上往下检查，第一个匹配的行起决定作用。
@@ -494,12 +496,15 @@ const api = createClient<{ traceparent?: string }>({
 | 2a | 带条目 schema 的 JSON Lines（`application/jsonl`、`application/x-ndjson`）和 JSON text sequences（`application/json-seq`） | `jsonLines`、`jsonSeq` | `AsyncIterable<{P}Item>` |
 | 2b | 其他顺序格式（以上格式但没有条目 schema） | `stream` | `ReadableStream<Uint8Array>` |
 | 3 | `application/json`、`*/*+json` | `json` | JSON 上下文中的 schema 类型（6.4）。即使 `type: string` 带有 `format: binary` 或 `contentMediaType`，也保持为 `string`，不会改为 `blob` |
-| 4 | `text/*` 等字符串格式 | `text` | `string` |
+| 4 | `text/*` 等字符串格式（schema 不是二进制） | `text` | `string`，按 Content-Type 的 `charset` 解码（没有时为 UTF-8） |
+| 4a | schema 为二进制（6.4）的 `text/*` 等字符串格式 | `blob` | `Blob`：保留到达时的字节，用于其他字符编码或直接转发的文件 |
 | 5 | `*/*`、`application/*` 等通配类型，且 schema 为二进制（6.4：`format: binary`，或没有 `contentEncoding` 的 `contentMediaType`） | `blob` | `Blob` |
 | 6 | 通配类型，且 schema 不是二进制 | `auto` | Schema 类型 \| `string` \| `Blob` |
 | 7 | 其他（`application/octet-stream`、图片等） | `blob` | `Blob` |
 
-使用 `auto` 时，解析方式由响应的实际 Content-Type 决定：JSON 媒体类型按 JSON 解析，`text/*` 读作字符串，其他读作 `Blob`。返回哪一种要到运行时才知道，因此 data 的类型是所有可能值的联合。这样可以避免给定义允许的值赋予错误的类型。通配类型会给出警告；对于实际上只返回 JSON 的 API，可以通过配置把通配类型视为 JSON（031 中的工作，016 中的配置）。如果按 JSON 处理的操作返回了非 JSON 的 Content-Type，结果为 `kind: 'parse'`。
+定义中没有内容的响应为 `none`，运行时会丢弃其响应体。设置 `typescript.bodilessResponses: read` 后，其中的错误响应（4xx、5xx，以及操作有成功状态码时的 `default`；不包括 `HEAD`）在 OperationDef 中带有 `readWithContentType: true`，错误类型为 `unknown`：带有 Content-Type 到达的响应体会像 `auto` 一样被读取，因此不会丢失定义遗漏的消息。不支持该标志的运行时仍像以前一样丢弃响应体。
+
+使用 `auto` 时，解析方式由响应的实际 Content-Type 决定：JSON 媒体类型按 JSON 解析，`text/*` 读作字符串，其他读作 `Blob`。返回哪一种要到运行时才知道，因此 data 的类型是所有可能值的联合。这样可以避免给定义允许的值赋予错误的类型。通配类型会给出警告；对于实际上只返回 JSON 的 API，可以通过配置把通配类型视为 JSON。如果按 JSON 处理的操作返回了非 JSON 的 Content-Type，结果为 `kind: 'parse'`。
 
 Server-Sent Events：条目 schema 把一个事件描述为带有属性 `event`、`data`、`id` 和 `retry` 的对象。其 `oneOf` 或 `anyOf` 中的每一项都是一个事件，并用写在该关键字旁边的属性补全；没有它们时，schema 本身就是唯一的事件。`{P}Event` 是这些事件的联合 `{ event: 'note'; data: Note; id?: string; retry?: number } | ...`，因此 `switch (e.event)` 可以收窄 `data`。`event` 是事件名称（`event` 的 `const` 或 `enum`）的联合；没有名称的事件为 `string`，代表其他任何名称。在有带标签联合类型的语言中，事件是以 `event` 为标签、以操作命名的联合类型（`StreamNoteEvent`），没有名称的事件是它的默认成员。schema 带有 JSON `contentMediaType` 的 `data`，类型为其 `contentSchema` 的类型（没有时为 `unknown`），并由运行时解析；其他 `data` 为 `string`。OperationDef 说明要解析哪些事件：列出属于 JSON 的事件名称（`event` 的 `const` 或 `enum`），使定义中未列出的事件保持为文本；只有当所有事件都是 JSON 且其中一个没有名称（代表其他任何名称）时，才使用 `jsonEvents: true`。在一组文本事件中，带 JSON 数据但没有名称的事件在运行时无法区分，因此其 data 保持为 `string`，并给出警告。`data` 总是必需的，因为没有 data 的事件不会被分发（与 `EventSource` 相同）；除非 `required` 列出了它们，`id` 和 `retry` 是可选的。运行时按 HTML 标准的描述解析流，并交出一个只能读取一次的异步可迭代对象；退出循环会取消流。由于 Result 已经返回，事件中的 JSON 无效时会在迭代中抛出异常。定义中未列出的事件原样到达，`data` 为字符串。语义模型保持请求/响应体的种类为 `stream`，并在其旁边携带事件（`MediaContent::events`）；tsurara-lower 会标记这类响应（`OperationTypes::sequences`），并给出单个条目的类型。每个运行时都能读取事件和 JSON 条目：`@tsurara/client` 和 Python 交出（异步）迭代器，Rust 交出用 `next().await` 读取的 `Items<T>`，Go 交出用 `All()` 读取的 `*Items[T]`；它们的超时覆盖发送和响应头，但不覆盖条目；Python、Rust 和 Go 通过流式传输层读取每个响应，使条目在服务器写出时即可到达。`@tsurara/client` 的 `parseEventStream` 以同样的方式读取没有 schema 的字节流。
 
@@ -621,7 +626,7 @@ apps/app-2/src/api.ts              app-2 的客户端
 }
 ```
 
-这一设置已在三个共享同一个包的应用中验证过：使用 Vite 的 React（开发服务器和生产构建，严格的 tsconfig，从 barrel 导入）、使用 Vite 的纯 TypeScript（宽松的 tsconfig，从子路径导入，自定义中间件和 `retry()`），以及用 Node 26 的类型剥离运行的 CLI（`nodenext`）。编辑生成的文件会重新加载 Vite 页面，Node 通过 pnpm 的符号链接运行该包，tree-shaking 即使通过 barrel 也能去掉未使用的操作，工作区中只有一份 `@tsurara/client`。`examples/pnpm-monorepo` 就是仓库中的这一设置，并在 CI 中验证：一个打包结果只保留所用操作的 Vite 应用，以及一个针对本地服务器进行端到端测试的 Node 应用。示例中的 Next.js 应用（App Router，一个服务端组件和一个客户端组件）无需 `transpilePackages` 即可用 Turbopack 和 webpack 构建：Next.js 16.4 会编译链接的工作区包中的 `.ts` 文件。它的 tsconfig 与其他使用方一样需要 `allowImportingTsExtensions`；没有它，`next build` 会在共享包中因 TS5097 失败。Node 和 TypeScript 的最低版本在 034 中验证，这两个应用作为 024 的验收标准进行验证。
+这一设置已在三个共享同一个包的应用中验证过：使用 Vite 的 React（开发服务器和生产构建，严格的 tsconfig，从 barrel 导入）、使用 Vite 的纯 TypeScript（宽松的 tsconfig，从子路径导入，自定义中间件和 `retry()`），以及用 Node 26 的类型剥离运行的 CLI（`nodenext`）。编辑生成的文件会重新加载 Vite 页面，Node 通过 pnpm 的符号链接运行该包，tree-shaking 即使通过 barrel 也能去掉未使用的操作，工作区中只有一份 `@tsurara/client`。`examples/pnpm-monorepo` 就是仓库中的这一设置，并在 CI 中验证：一个打包结果只保留所用操作的 Vite 应用，以及一个针对本地服务器进行端到端测试的 Node 应用。示例中的 Next.js 应用（App Router，一个服务端组件和一个客户端组件）无需 `transpilePackages` 即可用 Turbopack 和 webpack 构建：Next.js 16.4 会编译链接的工作区包中的 `.ts` 文件。它的 tsconfig 与其他使用方一样需要 `allowImportingTsExtensions`；没有它，`next build` 会在共享包中因 TS5097 失败。
 
 每个操作都有自己的文件，并设置了 `sideEffects: false`，因此即使从 barrel 导入，生产打包结果也只包含用到的函数。不过这说的是生产构建中的 tree-shaking。在 Node 中直接运行或在 Vite 开发服务器中，会加载 barrel 引用的所有模块。`tsc` 和编辑器在经过 barrel 时也会读取所有文件。对于操作很多的定义，请直接从子路径导入。
 
@@ -629,8 +634,6 @@ apps/app-2/src/api.ts              app-2 的客户端
 import { getPetById } from '@acme/openapi/operations/getPetById';
 import type { Pet } from '@acme/openapi/schemas/Pet';
 ```
-
-经过 barrel 和直接导入的加载时间在 025 中测量。
 
 当一个共享包生成多个定义（`targets`）时，请通过各自的子路径（`@acme/openapi/public`、`@acme/openapi/admin` 等）公开每个目标。每个目标的输出都有相同的名称（例如 `BaseUrl` 和 `servers`），因此用 `export *` 把它们合并到一个 barrel 中会造成名称冲突。
 
@@ -732,7 +735,7 @@ targets:
 
 不改变运行时值的映射是允许的，例如带品牌的类型（`string & { __brand: 'Uuid' }` 等）。
 
-`typeMappings` 和 `x-tsurara-type` 中的 `import.from` 按如下方式处理（016 中的工作）。
+`typeMappings` 和 `x-tsurara-type` 中的 `import.from` 按如下方式处理。
 
 - 以 `.` 开头的相对路径按 10.3，以其所在的配置文件为基准解析。生成器会把解析后的路径改写为相对于每个使用该类型的生成文件的说明符。
 - 包名这类非相对说明符原样写出。
@@ -831,7 +834,7 @@ extend 阶段在后端之后、`transformFiles` 之前运行。它接收模型�
   - `strict`、`erasableSyntaxOnly`、`verbatimModuleSyntax`、`exactOptionalPropertyTypes`、`noUncheckedIndexedAccess`、`isolatedDeclarations`
   - `moduleResolution` 设为 `nodenext` 和 `bundler`
 - 映射表测试：6.4 中表格的每一行都是一个带有输入和期望输出的测试。期望输出会对照 JSON Schema 的含义进行检查。只比较打印出的类型字符串，无法发现期望值本身的错误（例如把 `prefixItems` 元组做成定长的错误）。
-- 可赋值性测试：检查定义允许的值可以赋给生成的类型，而赋予定义不允许的值时 `@ts-expect-error` 成立（035 中的工作）。不承诺 TypeScript 能检查所有约束。对于 6.4.1 中近似处理的约束，测试会写明这些值是作为近似被接受的。
+- 可赋值性测试：检查定义允许的值可以赋给生成的类型，而赋予定义不允许的值时 `@ts-expect-error` 成立。不承诺 TypeScript 能检查所有约束。对于 6.4.1 中近似处理的约束，测试会写明这些值是作为近似被接受的。
 - 类型剥离检查：在 CI 中检查输出可以用 Node 的类型剥离导入并运行，并且能通过所支持的最低 TypeScript 版本（5.8）和开发所用版本的 `tsc`（`crates/tsurara-lang-typescript/tests/type_stripping.rs`；所有 tsc 测试都会运行两个版本）。
 - 基于属性的测试：根据随机构建的 schema 进行生成，并检查能通过 `tsc`。`crates/tsurara-cli/tests/properties.rs` 用 proptest 构建定义（组合、可空值、带循环的引用、readOnly 和 writeOnly、判别字段、对命名构成压力的名称），在一次 `tsc`（最严格的 tsconfig）和 pyright 运行中检查所有用例，并以每步一次检查的方式缩小失败的用例；最小的定义保存在 `target/proptest-failures` 中，以便添加到 `corpus/edge-cases`。CI 以固定种子运行 48 个用例，每周的 workflow 以新种子运行 2000 个（`TSURARA_PROPTEST_CASES`、`TSURARA_PROPTEST_SEED`）。它发现了通过引用指向自身的别名，这类别名现在会变为 `unknown`，或在给出警告后失去这些引用。
 - 快照测试：保存完整的输出，检测意外的变化。
@@ -922,11 +925,11 @@ extend 阶段在后端之后、`transformFiles` 之前运行。它接收模型�
 | TypeScript 和 Node 的最低版本 | TypeScript 5.8 或更高，Node 22 或更高 | 第 17 章 |
 | 是否把带判别字段的父 schema 变为通过 allOf 继承它的子 schema 的联合 | 否。判别字段不改变校验结果，因此只添加用于判别的字面量 | 6.5 |
 | 3.0 中写在 `$ref` 旁边的 `nullable` | 按规范忽略并给出警告。没有采纳兄弟键的兼容模式 | 6.3 |
-| 派生的类型名与其他名称冲突时 | 其他名称保留它；派生名称在后缀前加上 `Operation`，并给出警告（参考 kubb） | 6.6 |
+| 派生的类型名与其他名称冲突时 | 其他名称保留它；派生名称在后缀前加上 `Operation`，并给出警告 | 6.6 |
 | 既在 JSON 中使用、又作为 multipart 请求体使用、且含有二进制部分的具名 schema | 具名类型遵循 JSON（`string`）；multipart 请求体把该 schema 内联展开，并把二进制部分设为 `Blob \| File` | 6.4 |
 | 通配媒体类型的处理 | 按实际的 Content-Type 解析（`auto`），类型为可能值的联合。可通过配置视为 JSON | 8.5 |
 | 生成 TypeScript 以外的语言 | 与语言无关的语义模型、共享的命名、降级和运行时契约，以及每种语言一个后端；TypeScript 第一，Python 第二 | 18 |
-| 多语言设计中的未决问题（Q1 到 Q7） | 见 18.16 | 18.16 |
+| 多语言设计中的未决问题（Q1 到 Q7） | 见 18.15 | 18.15 |
 
 ## 17. 支持的环境 {#17-supported-environments}
 
@@ -935,7 +938,7 @@ extend 阶段在后端之后、`transformFiles` 之前运行。它接收模型�
 | TypeScript | 5.8 | 引入 `erasableSyntaxOnly` 的版本。开发使用 7.0.2；CI 用两者进行类型检查 |
 | Node | 22 | Node 20 的支持已于 2026 年 4 月结束。用类型剥离直接运行生成的代码需要 22.18 或更高版本 |
 | Rust（构建生成器） | 1.85 | 使用 edition 2024 |
-| Python（生成的代码和 `tsurara-client`） | 3.11 | 18.16，Q2 |
+| Python（生成的代码和 `tsurara-client`） | 3.11 | 18.15，Q2 |
 
 `@tsurara/client` 需要 `fetch`、`Request`、`Response`、`Headers`、`AbortController` 和 `URL`（仅其构造函数）。`ReadableStream`、`Blob`、`FormData`、`URLSearchParams`、`AbortSignal.any` 和 `DOMException` 存在时才会使用，因此在缺少其中一部分的环境（如 React Native）中客户端也能运行：没有它们时，请求、超时和中止仍能工作，React Native 的文件对象（`{ uri, name, type }`，通过 `reactNativeFile` 传入）会作为文件部分上传。流式响应需要支持流式响应体的 `fetch`（Expo 中为 `expo/fetch`）；没有时，`parseAs: 'stream'` 会返回 `kind: 'parse'`。在 Hermes 上，`runtimes/typescript/hermes`（`@tsurara/hermes-check`）会像 Metro 一样，用 React Native 自带的 `fetch`、`FormData` 和 `URL` polyfill 及其 Babel 预设打包客户端：由 React Native 0.88 的 `hermesc` 编译，并在最后一个 Hermes CLI 发布版本（v0.13.0，对应 React Native 0.75 的时期）的 VM 上运行 JSON 调用、basic 认证、使用 `reactNativeFile` 的 multipart 上传、超时、中止，以及没有流式 `fetch` 时流的 `parse` 失败。尚未在真机上验证 React Native 和 Expo。
 
@@ -1008,7 +1011,7 @@ tsurara 从一份 OpenAPI 定义为多种语言生成代码：目前是 TypeScri
 | `tsurara-cli` | `tsurara` 命令。它依赖所有内置的 `tsurara-lang-<language>` crate，并拥有把 `language` 值映射到后端的注册表，因此它下面的任何 crate 都不依赖语言 crate |
 | `tsurara-testkit` | 各语言的检查器（18.12） |
 
-原来的 `tsurara-codegen` crate 已经不存在：它的分析移到了 `tsurara-sem`，`emit.rs` 移到了 `tsurara-lang-typescript`。命名移到了 `tsurara-naming` 和 TypeScript 后端。`ir.rs` 是模型中与语言无关的类型 IR，由 `tsurara-lower` 和每个后端使用；只有它的变体 `Undefined`、`Ref`、`External` 和 `Builtin` 属于 TypeScript 的降级（它们从不出现在模型中，也不会被序列化）。`print.rs`（TypeScript 类型打印，规范化也用它来获得稳定的成员顺序）和 `options.rs`（通用选项）也留在 `tsurara-sem` 中；043 到 045 把仅 TypeScript 使用的选项和命名移了出去，留下了这些。
+原来的 `tsurara-codegen` crate 已经不存在：它的分析移到了 `tsurara-sem`，`emit.rs` 移到了 `tsurara-lang-typescript`。命名移到了 `tsurara-naming` 和 TypeScript 后端。`ir.rs` 是模型中与语言无关的类型 IR，由 `tsurara-lower` 和每个后端使用；只有它的变体 `Undefined`、`Ref`、`External` 和 `Builtin` 属于 TypeScript 的降级（它们从不出现在模型中，也不会被序列化）。`print.rs`（TypeScript 类型打印，规范化也用它来获得稳定的成员顺序）和 `options.rs`（通用选项）也留在 `tsurara-sem` 中，而仅 TypeScript 使用的选项和命名已移了出去。
 
 ```rust
 pub trait Backend {
@@ -1422,34 +1425,7 @@ TypeScript 排在第一：它在共享的 crate 之上重建，并继续作为�
 
 Python 有结构化联合和多继承，因此不会检验为没有联合或继承的语言（Go、Java、C#、GDScript）准备的回退方案。在加入这样的语言之前，这些 pass 由使用小型能力集的降级测试覆盖。
 
-### 18.15 迁移计划 {#1815-migration-plan}
-
-重构步骤保持 TypeScript 输出逐字节相同（所有现有快照都不变）。有意改变输出的步骤会明确说明。041 依赖 029，因为目前 JSON 内部的 `contentMediaType` 字符串会变成 `Blob | File`（`table.yaml` 也这样期望）；029 有意改变这些快照并单独评审，这样 041 就能让其余部分保持不变。
-
-| Issue | 变更 | 依赖 |
-|---|---|---|
-| 036 | 决定未决问题；把本文档合并到 design.md | — |
-| 037 | 拆分为多个 crate；`Backend` trait 和注册表；TypeScript 移到 `tsurara-lang-typescript` | 036 |
-| 038 | 模型中的整数、数字和格式 | 037 |
-| 039 | 显式的枚举节点 | 037 |
-| 040 | 结构化的判别字段；保留 `allOf` 的结构 | 037 |
-| 041 | `Binary`、`BodyKind`、按语言划分的外部类型 | 037、016、029 |
-| 042 | `tsurara-naming`：上下文、作用域、`NamingPolicy`、传输名称；模型不包含标识符 | 038–041、032 |
-| 043 | 语义警告和后端警告 | 042、015 |
-| 044 | 配置：`language`、语言部分、删除顶层键 | 042、016 |
-| 045 | 可序列化、带版本的语义模型 | 042 |
-| 047 | 运行时契约：OperationDef schema、Result 种类、运行时能力、一致性测试向量；移动 `@tsurara/client` | 036 |
-| 048 | 带首选名称的提升候选 | 042 |
-| 049 | CLI 中的后端标记和附属文件 | 037 |
-| 050 | 语义用例测试、按语言的期望值、检查器框架 | 045 |
-| 051 | `tsurara-lower`：`tir`、能力、共享 pass、校验器 | 048 |
-| 052 | TypeDef 格式、与操作的绑定、解码和编码向量 | 047、051 |
-| 053 | `tsurara-pretty`；移植 TypeScript 打印器 | 037 |
-| 054 | 带 `describe` 的外部后端协议 | 045、044、049 |
-| 055 | Python 后端，仅类型 | 043、044、049、050、051、052、053 |
-| 056 | `transformModel` 钩子 | 045、017 |
-
-### 18.16 已决事项 {#1816-decisions}
+### 18.15 已决事项 {#1815-decisions}
 
 于 2026-11-10 决定（采纳了早期草稿中的提议）。
 

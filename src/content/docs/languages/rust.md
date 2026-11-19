@@ -1,7 +1,7 @@
 ---
 title: "Rust"
 sourcePath: docs/languages/rust.md
-sourceHash: f5fc7d1552f6
+sourceHash: 6f0956554b27
 ---
 
 The Rust backend (`language: rust`, crate `tsurara-lang-rust`) generates structs and enums with serde derives, and async call functions for the runtime crate `tsurara-client` (`runtimes/rust`). This document describes the mapping. The backend is experimental: `tsurara generate` says so, and its output may change.
@@ -40,7 +40,7 @@ Annotations (design.md 18.7): serde derives and attributes. Constructs serde's d
 | Nullable property | `pub name: Option<T>` (`null` is `None`; a missing value is accepted too, a wider type) |
 | Optional and nullable | `#[serde(default, skip_serializing_if = "Nullable::is_missing")] pub name: tsurara_client::Nullable<T>`, an enum of `Missing`, `Null` and `Value(T)` (Q3) |
 | `additionalProperties` | `#[serde(flatten)] pub additional_properties: BTreeMap<String, T>` |
-| String enum | `pub enum Status { #[serde(rename = "available")] Available, ... }`; where values are received, also `#[serde(untagged)] Unknown(String)`, which keeps an unlisted value and writes it back |
+| String enum | `pub enum Status { #[serde(rename = "available")] Available, ... }`, variants named from `x-enum-varnames` or `x-enumNames` when the definition has them; where values are received, also `#[serde(untagged)] Unknown(String)`, which keeps an unlisted value and writes it back |
 | Integer or mixed enum | `pub type Level = i64;` with `pub const LEVEL_1: Level = 1;` |
 | Discriminated union | `pub enum Pet { Cat(Cat), Dog(Dog) }` with `tsurara_client::tagged_union!`, which reads the discriminator and decodes the member from the whole object (the member keeps its tag field); the `defaultMapping` member takes unlisted values, and otherwise, where received, `Unknown(serde_json::Value)` does |
 | Other unions (`oneOf`, `anyOf`, type arrays) | `#[serde(untagged)] pub enum Id { Integer(i64), String(String) }`, members tried in order; variant names from the member types |
@@ -53,7 +53,7 @@ Annotations (design.md 18.7): serde derives and attributes. Constructs serde's d
 | Array, map | `Vec<T>`, `BTreeMap<String, T>` |
 | `{}`, external without a `rust` entry | `serde_json::Value` |
 | Binary | `tsurara_client::File` where sent (bodies, multipart parts); `Vec<u8>` for responses |
-| `x-tsurara-type` / type mappings | The `rust` entry, a path with generics (`uuid::Uuid`, `chrono::DateTime<chrono::Utc>`), checked like 073 |
+| `x-tsurara-type` / type mappings | The `rust` entry, a path with generics (`uuid::Uuid`, `chrono::DateTime<chrono::Utc>`) |
 
 ### Approximations
 

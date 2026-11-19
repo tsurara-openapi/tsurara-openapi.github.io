@@ -1,7 +1,7 @@
 ---
 title: "Writing a backend"
 sourcePath: docs/guide/backends.md
-sourceHash: 5ad620817d3f
+sourceHash: 0465f5bb3b6f
 ---
 
 A backend generates code for one language. Backends that ship with tsurara live in its repository; a backend for another language can live in its own repository and run as a program that tsurara starts. This guide goes from an empty repository to a backend that passes `tsurara test-backend` and a runtime that passes the conformance vectors. You need only the `tsurara` binary.
@@ -116,7 +116,7 @@ jobs:
   test:
     steps:
       - uses: actions/checkout@v5
-      - run: npm install --global tsurara@0.1.0   # the `tsurara` binary of the version you support
+      - run: npm install --global tsurara@0.1.2   # the `tsurara` binary of the version you support
       - run: tsurara test-backend --backend 'node backend/backend.mjs' --check 'node backend/check.mjs'
       - run: npm test --prefix runtime
 ```

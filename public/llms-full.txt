@@ -272,7 +272,7 @@ jobs:
   test:
     steps:
       - uses: actions/checkout@v5
-      - run: npm install --global tsurara@0.1.0   # the `tsurara` binary of the version you support
+      - run: npm install --global tsurara@0.1.2   # the `tsurara` binary of the version you support
       - run: tsurara test-backend --backend 'node backend/backend.mjs' --check 'node backend/check.mjs'
       - run: npm test --prefix runtime
 ```
@@ -329,7 +329,7 @@ A call never rejects. It returns a Result:
 |---|---|---|
 | `success` | `true` | A success status of the definition; `data` has its type |
 | `http` | `false` | An error status, or a status the definition does not document (`documented: false`, `error: unknown`) |
-| `network` | `false` | `fetch` failed (DNS, connection, CORS) |
+| `network` | `false` | `fetch` failed (DNS, connection, CORS), or the connection failed while the body was read |
 | `timeout` | `false` | `timeout` passed |
 | `aborted` | `false` | The caller's `signal` aborted |
 | `parse` | `false` | The body does not match the definition (Content-Type, JSON) |
@@ -341,6 +341,12 @@ if (r.ok) render(r.data);
 else if (isHttpError(r, 404)) showNotFound(r.error); // the documented 404 body
 else report(r);
 ```
+
+When `network`, `timeout` or `aborted` ended the reading of the body, the Result keeps the `response`, so its status and headers are still known (`r.response?.status`); without a response, the failure came before one arrived.
+
+Text bodies (`text/*` and the like) are decoded with the `charset` of their Content-Type, UTF-8 without one; a charset the platform's `TextDecoder` does not know is a `parse` failure. A text media type whose schema is binary (`type: string, format: binary`) is read as a `Blob` instead, with its bytes as they arrive.
+
+An error response the definition gives no content has `error: undefined`, and its body is discarded. With `typescript.bodilessResponses: read`, a body that arrives with a Content-Type is read anyway (as JSON, text or a `Blob`, by that type) and `error` is `unknown`, so that a message the definition forgot is not lost.
 
 Checking only `r.status === 404` does not narrow `r.error`, because the member for undocumented statuses has `status: number`; `isHttpError` also checks `documented`.
 
@@ -585,7 +591,33 @@ Retry in one place. TanStack Query retries a failed query three times by default
 
 ## Per-call options
 
-`signal`, `headers`, `timeout`, `baseUrl`, `context`, `validate`, and `contentType` (for operations with several request media types) can be given per call.
+`signal`, `headers`, `timeout`, `baseUrl`, `context`, `validate`, `fetchOptions`, and `contentType` (for operations with several request media types) can be given per call.
+
+`fetchOptions` are options of `fetch` itself, such as `cache`, `credentials`, `keepalive` or Next.js's `next`; the client has them too, and a call's are spread over the client's. The method, headers, body, signal and redirect handling stay the client's. Middleware sees them as `req.fetchOptions` and can replace them.
+
+```ts
+await getPet(api, {
+  path: { petId: 1 },
+  fetchOptions: { cache: 'force-cache', next: { revalidate: 60, tags: ['pet'] } },
+});
+```
+
+## The raw response
+
+`api.requestRaw(def, data)` sends a call as the generated function would (with the client's headers, auth and middleware), but returns the response with its body unread, to stream it on (a large download) or to read it in a way the definition does not say. The generated `{operation}Def` describes the operation:
+
+```ts
+import { exportOrdersDef, type ExportOrdersData } from './api/operations/exportOrders.js';
+
+const r = await api.requestRaw(exportOrdersDef, { query: { status: 'shipped' } } satisfies ExportOrdersData);
+if (r.kind === 'response' && r.ok) return new Response(r.response.body, { headers: r.response.headers });
+```
+
+The Result is `{ kind: 'response', ok, status, documented, response }`, where `ok` and `documented` are decided as for a call, or a transport failure. The `timeout` covers the call until the response arrives; the `signal` still cancels the reading of the body. `onResult` and `onUndocumentedStatus` are not called.
+
+## Multipart and query values
+
+A multipart part follows the `encoding` of the definition. An object without an `encoding` Content-Type is sent as a field with its JSON text; with one, it is sent as a part of that type, which `FormData` can only do as a file (with a file name). A query parameter, or a member of an `in: querystring` object, whose value is `null` is left out, like a missing one.
 
 ## A vendored runtime
 
@@ -601,7 +633,7 @@ runtime: vendor
 |---|---|---|
 | TypeScript | `_runtime/` | Generated files import it relatively; import `createClient` from `./api/_runtime/index.js` |
 | Python | `_runtime/` | `from api._runtime import Client`. Add httpx to your dependencies |
-| Rust | `runtime/` | Set `rust.runtimeCrate` to the module's path (`crate::api::runtime`), and add the crates `mod.rs` lists (serde, serde_json, indexmap; with operations also tokio, fastrand, httpdate and reqwest) |
+| Rust | `runtime/` | Set `rust.runtimeCrate` to the module's path (`crate::api::runtime`), and add the crates `mod.rs` lists (serde, serde_json, indexmap; with operations also tokio, fastrand, httpdate, encoding_rs and reqwest) |
 | Go | `internal/tsurara/` | The import path comes from your `go.mod` |
 
 The copy is regenerated with the code: it carries the generated-file marker, `tsurara check` reports edits to it, and it always matches the generator's version (there is no runtime version to check). `generate` prints the third-party dependencies to add.
@@ -656,12 +688,16 @@ typescript:
   importExtension: ts
   layout: split
   enumStyle: union
+  bodilessResponses: discard
   typeMappings:
     uuid: { type: "Brand<'Uuid'>", import: { from: ./brand.ts, name: Brand } }
   overrides:
     "#/components/schemas/Id": string
   naming:
     schemaCase: preserve
+    functionCase: preserve
+    typePrefix: Api
+    enumKeyCase: preserve
     overrides:
       "#/components/schemas/Error": ApiErrorBody
 ```
@@ -671,6 +707,7 @@ typescript:
 | `importExtension` | `js` | Extension of relative imports in generated code: `js` (for `tsc` builds and bundlers), `ts` (to run with Node type stripping; consumers need `allowImportingTsExtensions` or `rewriteRelativeImportExtensions`), or `none` (Metro, some bundlers) |
 | `layout` | `split` | `split`: one file per operation (`operations/getPet.ts`) and per schema (`schemas/Pet.ts`); `tags`: one file per tag; `single`: one file |
 | `enumStyle` | `union` | `union`: string literal unions; `const`: also an object keyed by the values (`Status.available`), with the type derived from it |
+| `bodilessResponses` | `discard` | What happens to the body of an error response (4xx, 5xx, a `default` next to success statuses) the definition gives no content: `discard` drops it and the error is `undefined`; `read` reads a body that arrives with a Content-Type, as `auto` does, and the error is `unknown`. Not for `HEAD` |
 | `aggregateMaps` | `false` | Also emit `paths.ts` and `operations.ts`, maps of every operation for generic clients |
 | `clientModule` | `@tsurara/client` | The module generated code imports the runtime from |
 | `mocks` | | `msw` or `fetch`: also emit mock factories (`mockPet()`, from the sample values of the definition) and one request handler per operation under `mocks/`, as MSW handlers or as routes for `mockFetch` of `@tsurara/client/testing` ([Mocks](mocks.md)). Nothing else imports them, and without the option nothing mentions `msw` |
@@ -681,6 +718,9 @@ typescript:
 | `typeMappings` | | A type per `format` (`uuid`, `date`, ...): a type expression, or `{ type, import: { from, name } }`. Paths in `from` that start with `.` are relative to this file. A mapping must not change what JSON parsing produces: `Date` for `date-time` and `bigint` for `int64` are errors |
 | `overrides` | | A type per JSON Pointer, in the same form as `typeMappings` |
 | `naming.schemaCase` | `preserve` | `preserve` keeps component names that are identifiers; `pascal` makes every type name PascalCase |
+| `naming.typePrefix` | | Put before the names of schema types: `Api` gives `ApiPet` (and `ApiPetWritable`). Types derived from operations (`GetPetResult`) and names fixed by `naming.overrides` keep their names |
+| `naming.enumKeyCase` | `preserve` | The keys of `enumStyle: const` objects: `preserve` writes the member names (`x-enum-varnames`, `x-enumNames`) or the values as they are; `constant` gives `PAYMENT_PENDING`, `pascal` `PaymentPending`, `camel` `paymentPending`. Keys that become equal are numbered (`A_B`, `A_B_2`) |
+| `naming.functionCase` | `preserve` | `preserve` keeps operation ids that are identifiers as function names (`ListPets`, `get_pet`); `camel` makes every function name camelCase (`listPets`, `getPet`) |
 | `naming.overrides` | | Final TypeScript identifiers per JSON Pointer, used as they are |
 
 Types in `typeMappings`, `overrides` and `x-tsurara-type` must be type expressions (names, type arguments, arrays, `|`, `&`, literals); anything else is an error in the configuration and ignored with a warning in a definition.
@@ -1132,7 +1172,7 @@ How schemas become TypeScript types. The rules are fixed and each row is a test 
 |---|---|
 | `type: string`, `integer`, `number`, `boolean`, `null` | `string`, `number`, `number`, `boolean`, `null` |
 | `format: date-time`, `uuid`, `int64`, ... | The base type (`string`, `number`); the format goes in JSDoc. `typeMappings` can name another type that JSON parsing produces (a branded string, for example) |
-| `enum` | A union of literals (`'a' \| 'b'`); `enumStyle: const` adds an object of the values |
+| `enum` | A union of literals (`'a' \| 'b'`); `enumStyle: const` adds an object of the values, keyed by `x-enum-varnames` or `x-enumNames` when the definition has them, in the case `naming.enumKeyCase` asks for |
 | `const` | A literal type |
 | `nullable: true` (3.0), `type: [string, "null"]` (3.1) | `string \| null` |
 | `type: object` with `properties` | An object type; properties not in `required` are optional (`a?: T`) |
@@ -1276,7 +1316,7 @@ Annotations (design.md 18.7): `encoding/json` struct tags. What tags cannot expr
 | Array, map | `[]T`, `map[string]T` |
 | `{}`, external without a `go` entry | `any` |
 | Binary | `tsurara.File` (bytes, file name, media type) where sent (bodies, multipart parts); `[]byte` for responses |
-| `x-tsurara-type` / type mappings | The `go` entry, or `go.typeMappings` and `go.overrides`: a type with the import path of its package (`{ type: uuid.UUID, import: { from: github.com/google/uuid } }`, `{ type: time.Time, import: { from: time } }`), checked like 073 |
+| `x-tsurara-type` / type mappings | The `go` entry, or `go.typeMappings` and `go.overrides`: a type with the import path of its package (`{ type: uuid.UUID, import: { from: github.com/google/uuid } }`, `{ type: time.Time, import: { from: time } }`) |
 
 ### Approximations
 
@@ -1296,7 +1336,7 @@ Annotations (design.md 18.7): `encoding/json` struct tags. What tags cannot expr
 
 One package in the output directory (Go cannot split a package across directories without import cycles). One file per declaration (`pet_gen.go`) and per operation (`get_pet_by_id_op_gen.go`), and `tsurara_gen.go` with the package documentation and the runtime version. File names end in `_gen.go`, so that no name ends in a build constraint (`_linux.go`, `_test.go`). Every file starts with `// Code generated by tsurara. DO NOT EDIT.`, the line Go tools recognize, and is printed as `gofmt` would (aligned fields, tags and comments), since backends run no formatter (18.8). Descriptions become `//` comments without their indentation and blank lines, so that gofmt finds no code blocks, lists or headings to rewrite.
 
-Everything is exported: types, fields, constants and functions are PascalCase with Go's initialisms (`ID`, `URL`, `HTTP`, `JSON`, `API`, ... as golint lists them, also in the plural: `PetID`, `PhotoURLs`, `GetPetByID`). A name whose first letter has no upper case gets `X` (`X日本語`), one that starts with a digit `V`. Enum constants are the type's name and the value (`PetStatusAvailable`). All of them share the package scope. Functions keep their operation's name: a schema with the same name moves aside, as `{Name}Body` when it is that operation's request body (`toggleAll` with the schema `ToggleAll` gives `ToggleAll(ctx, c, body ToggleAllBody, nil)`), otherwise as `{Name}Model`. Other collisions are numbered in claim order (types, constants, then functions). Go's keywords and predeclared identifiers are lower case, so exported names never collide with them; only names that would be empty or start with a digit change (`V1`). Fields are named per struct, after the names the struct uses itself (`AdditionalProperties`), and carry their JSON key in the tag.
+Everything is exported: types, fields, constants and functions are PascalCase with Go's initialisms (`ID`, `URL`, `HTTP`, `JSON`, `API`, ... as golint lists them, also in the plural: `PetID`, `PhotoURLs`, `GetPetByID`). A name whose first letter has no upper case gets `X` (`X日本語`), one that starts with a digit `V`. Enum constants are the type's name and the value (`PetStatusAvailable`), or the member name of `x-enum-varnames` or `x-enumNames` when the definition gives one (`PetStatusInStock`). All of them share the package scope. Functions keep their operation's name: a schema with the same name moves aside, as `{Name}Body` when it is that operation's request body (`toggleAll` with the schema `ToggleAll` gives `ToggleAll(ctx, c, body ToggleAllBody, nil)`), otherwise as `{Name}Model`. Other collisions are numbered in claim order (types, constants, then functions). Go's keywords and predeclared identifiers are lower case, so exported names never collide with them; only names that would be empty or start with a digit change (`V1`). Fields are named per struct, after the names the struct uses itself (`AdditionalProperties`), and carry their JSON key in the tag.
 
 ## Call functions and results
 
@@ -1307,7 +1347,7 @@ func GetPetByID(ctx context.Context, c *tsurara.Client, petID int64, opts *GetPe
 - The doc comment starts with the function's name (`// GetPetByID calls GET /pet/{petId}.`), followed by the summary and description.
 - The context cancels the call and carries deadlines. Required parameters and a required body are arguments; everything optional is a pointer field of `{Operation}Options`, and `opts` may be `nil`.
 - A body with several media types is a wrapper struct `{Operation}Body` with one pointer per media type (`JSON *Pet`, `Form *Pet`, `OctetStream *tsurara.File`); the field that is set picks the `Content-Type`.
-- `*tsurara.Success[T]` has `Status`, `Data T`, `Headers` and `Operation`. `T` is the success body type: a response without content is `struct{}` (or the zero value of the other response's type), different types `any`; a response with a JSON media type is read as JSON (as in Rust). Binary responses are `[]byte`, text responses `string`.
+- `*tsurara.Success[T]` has `Status`, `Data T`, `Headers` and `Operation`. `T` is the success body type: a response without content is `struct{}` (or the zero value of the other response's type), different types `any`; a response with a JSON media type is read as JSON (as in Rust). Binary responses are `[]byte`, text responses `string` with the bytes as they arrive (the standard library has no charsets but UTF-8; convert another `charset` with `golang.org/x/text`).
 - Server-Sent Events, JSON Lines and JSON text sequences with an item schema (`itemSchema`, or `x-itemSchema` before 3.2; design.md 8.5) are `*tsurara.Success[*tsurara.Items[T]]` when every success is read item by item: the function calls `tsurara.DoItems` and returns once the headers have arrived, and `for item, err := range s.Data.All()` reads them. Events are a union wrapper with one pointer per event (`StreamEvent{StreamNoteEvent *StreamNoteEvent; ...; Unknown json.RawMessage}`), selected by `event`; several names of one event are a named type with constants (`MixedPingEventNamePong`). Leaving the loop closes the response, `Close` closes it without reading, and the client's timeout does not cover reading the items (the context does). With a JSON media type next to the stream, the operation is read as JSON as above.
 - The error is `*tsurara.Failure[E]` for every outcome of the contract except success, with `Kind` (`tsurara.KindHTTP`, `KindNetwork`, `KindTimeout`, `KindParse`, `KindUnexpected`, `KindAborted`), `Status`, `Documented` with the documented error body `E` when there is one, the raw body otherwise, and `Cause`. It unwraps to the cause, so `errors.Is(err, context.Canceled)` works. `errors.As(err, &failure)` with `var failure *tsurara.Failure[Problem]` gives the operation's documented body; `var f tsurara.AnyFailure` reads the failure of any operation, with `f.Info()` (`Kind`, `Status`, `Documented`, `Headers`, `Cause`, `Operation`).
 - OperationDefs are the JSON of `spec/operation-def.schema.json`, embedded as a string and parsed once (`sync.OnceValue`).
@@ -1366,7 +1406,7 @@ for _, pet := range pets.Data {
 
 The Python backend (`language: python`, crate `tsurara-lang-python`) generates dataclasses, enums and type aliases, with TypeDefs for a runtime that converts JSON generically (design.md 18.7). Generated code uses the runtime `tsurara-client` (`runtimes/python`): sync and async clients over httpx, Results, and the TypeDef codec; it passes the conformance vectors in `spec/`. Each operation gets a call function.
 
-Generated code requires Python 3.11 or later (design.md 18.16, Q2) and is checked with pyright as Python 3.11.
+Generated code requires Python 3.11 or later (design.md 18.15, Q2) and is checked with pyright as Python 3.11.
 
 ## Quick start
 
@@ -1423,7 +1463,7 @@ with Client("https://petstore3.swagger.io/api/v3") as client:
 | Nullable property | `name: T \| None` |
 | Optional and nullable | `name: T \| None \| Missing = MISSING` (`_support.py`); missing and `null` differ only here (Q3) |
 | `additionalProperties` | `additional_properties: dict[str, T] = field(default_factory=dict)` |
-| Enum | `class Status(Enum)` with members named from the values (`IT_S`, `VALUE_1`); at a received site the annotation is `Status \| str` (or `\| int`) |
+| Enum | `class Status(Enum)` with members named from the values (`IT_S`, `VALUE_1`), or from `x-enum-varnames` or `x-enumNames` when the definition has them; at a received site the annotation is `Status \| str` (or `\| int`) |
 | Open tagged union | At a received site, `Cat \| Dog \| dict[str, Any]`: an unlisted discriminator keeps the JSON object |
 | Object with only `additionalProperties` | `dict[str, T]` |
 | `oneOf`, `anyOf`, type arrays | `Name: TypeAlias = "A \| B"` |
@@ -1548,7 +1588,7 @@ Annotations (design.md 18.7): serde derives and attributes. Constructs serde's d
 | Nullable property | `pub name: Option<T>` (`null` is `None`; a missing value is accepted too, a wider type) |
 | Optional and nullable | `#[serde(default, skip_serializing_if = "Nullable::is_missing")] pub name: tsurara_client::Nullable<T>`, an enum of `Missing`, `Null` and `Value(T)` (Q3) |
 | `additionalProperties` | `#[serde(flatten)] pub additional_properties: BTreeMap<String, T>` |
-| String enum | `pub enum Status { #[serde(rename = "available")] Available, ... }`; where values are received, also `#[serde(untagged)] Unknown(String)`, which keeps an unlisted value and writes it back |
+| String enum | `pub enum Status { #[serde(rename = "available")] Available, ... }`, variants named from `x-enum-varnames` or `x-enumNames` when the definition has them; where values are received, also `#[serde(untagged)] Unknown(String)`, which keeps an unlisted value and writes it back |
 | Integer or mixed enum | `pub type Level = i64;` with `pub const LEVEL_1: Level = 1;` |
 | Discriminated union | `pub enum Pet { Cat(Cat), Dog(Dog) }` with `tsurara_client::tagged_union!`, which reads the discriminator and decodes the member from the whole object (the member keeps its tag field); the `defaultMapping` member takes unlisted values, and otherwise, where received, `Unknown(serde_json::Value)` does |
 | Other unions (`oneOf`, `anyOf`, type arrays) | `#[serde(untagged)] pub enum Id { Integer(i64), String(String) }`, members tried in order; variant names from the member types |
@@ -1561,7 +1601,7 @@ Annotations (design.md 18.7): serde derives and attributes. Constructs serde's d
 | Array, map | `Vec<T>`, `BTreeMap<String, T>` |
 | `{}`, external without a `rust` entry | `serde_json::Value` |
 | Binary | `tsurara_client::File` where sent (bodies, multipart parts); `Vec<u8>` for responses |
-| `x-tsurara-type` / type mappings | The `rust` entry, a path with generics (`uuid::Uuid`, `chrono::DateTime<chrono::Utc>`), checked like 073 |
+| `x-tsurara-type` / type mappings | The `rust` entry, a path with generics (`uuid::Uuid`, `chrono::DateTime<chrono::Utc>`) |
 
 ### Approximations
 

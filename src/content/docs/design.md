@@ -1,7 +1,7 @@
 ---
 title: "tsurara design"
 sourcePath: docs/design.md
-sourceHash: 7153d85fc480
+sourceHash: 6e2c6f2019ac
 ---
 
 This document describes the design of tsurara, a tool that generates TypeScript types and API call functions from OpenAPI definitions.
@@ -197,9 +197,9 @@ The following two can also be expressed exactly in TypeScript. When `minItems` e
 
 Combinations that no value can satisfy become `never`. These are `minItems` greater than `maxItems`, and `items: false` with `minItems` exceeding the number of `prefixItems`.
 
-The IR tuple holds the number of required elements in addition to the list of element types (work in 028).
+The IR tuple holds the number of required elements in addition to the list of element types.
 
-Whether a value is binary depends on where it appears. A value declared as `type: string` inside JSON arrives as a JSON string, so it is `string` even with `contentMediaType: text/html` or `format: binary`. Only the request or response body itself (`application/octet-stream` and so on) and multipart part values become `Blob | File`. Part values are the top-level properties of a multipart body schema and the items of arrays among them, following `$ref`s. A named object schema whose only uses (every `$ref` and discriminator mapping in every document) are multipart request bodies is declared with part values, and those bodies refer to it. Any other named schema is converted as a JSON value, so its type is true wherever it is used inside JSON. When a multipart body refers to such a schema and it has binary part values, the body type expands it inline with `Blob | File` for those parts instead of referring to it; the named type is not changed and no false type is emitted (decided in 029).
+Whether a value is binary depends on where it appears. A value declared as `type: string` inside JSON arrives as a JSON string, so it is `string` even with `contentMediaType: text/html` or `format: binary`. Only the request or response body itself (`application/octet-stream` and so on) and multipart part values become `Blob | File`. Part values are the top-level properties of a multipart body schema and the items of arrays among them, following `$ref`s. A named object schema whose only uses (every `$ref` and discriminator mapping in every document) are multipart request bodies is declared with part values, and those bodies refer to it. Any other named schema is converted as a JSON value, so its type is true wherever it is used inside JSON. When a multipart body refers to such a schema and it has binary part values, the body type expands it inline with `Blob | File` for those parts instead of referring to it; the named type is not changed and no false type is emitted.
 
 #### 6.4.1 What is exact, what is approximated, and what is rejected
 
@@ -222,7 +222,7 @@ A discriminator does not change the validation result (the Discriminator Object 
 
 readOnly/writeOnly: for a schema that has either (including through reference targets), `PetWritable` is generated in addition to the original type. The original type is used in responses and drops writeOnly properties. The `Writable` type is used in requests and drops readOnly properties. Schemas with neither get no `Writable` type. The split can be disabled in the configuration, in which case readOnly/writeOnly are ignored and only one type is emitted.
 
-Whether a schema has readOnly/writeOnly is decided over the whole reference graph. For mutual references, such as A referencing B and B referencing A, the computation iterates per strongly connected component until the results stop changing. A provisional result from the middle of a check must not be treated as final. Settling on a provisional result leaves readOnly properties from the other side of a mutual reference in request types (work in 030).
+Whether a schema has readOnly/writeOnly is decided over the whole reference graph. For mutual references, such as A referencing B and B referencing A, the computation iterates per strongly connected component until the results stop changing. A provisional result from the middle of a check must not be treated as final. Settling on a provisional result leaves readOnly properties from the other side of a mutual reference in request types.
 
 Adding a single readOnly property to a schema changes the request-side type name for references to it from `X` to `XWritable`. This follows the naming rules, but is a breaking change for user code (chapter 14).
 
@@ -238,7 +238,7 @@ Backends that turn inline schemas into named types (not TypeScript) derive their
 
 Names that collide with reserved words or globals get the suffix `Model` (`Error` → `ErrorModel`, `Date` → `DateModel`). If the suffixed name still collides with another name, `2`, `3`, and so on are appended. Avoided collisions are reported as warnings (6.8), and the names can be pinned to something else with `naming.overrides`.
 
-When a type name derived from an operation (`{P}Data`, `{P}Responses`, `{P}Errors`, `{P}Result`, `{P}ResponseHeaders`, `{}Def`, and the webhook and callback types) is already taken, usually by a schema, the schema keeps its name and only that derived name moves aside: `Operation` goes before its suffix (`ListPetsOperationResult`), then a number if that is taken too. The function name and the other derived names stay, so adding a schema named `ListPetsResult` never changes the function `listPets` to `listPets2`. A `renamed` warning names both sides, and `naming.overrides` can choose another name. This follows kubb's collision detection (semantic suffixes across kinds, numbers within one kind). The first policy stopped generation with an error; the OpenAI definition has ten such collisions (`UsageCompletionsResult` is both a schema and the result of `usageCompletions`), so it changed in 064.
+When a type name derived from an operation (`{P}Data`, `{P}Responses`, `{P}Errors`, `{P}Result`, `{P}ResponseHeaders`, `{}Def`, and the webhook and callback types) is already taken, usually by a schema, the schema keeps its name and only that derived name moves aside: `Operation` goes before its suffix (`ListPetsOperationResult`), then a number if that is taken too. The function name and the other derived names stay, so adding a schema named `ListPetsResult` never changes the function `listPets` to `listPets2`. A `renamed` warning names both sides, and `naming.overrides` can choose another name. The first policy stopped generation with an error; the OpenAI definition has ten such collisions (`UsageCompletionsResult` is both a schema and the result of `usageCompletions`), so it changed.
 
 For names, determinism and stability are considered separately.
 
@@ -389,7 +389,7 @@ export function getPetById<Ctx>(
 - The sources are embedded in the binary at build time (`tsurara-runtimes`, a build script over `runtimes/`, tests left out), so the copy always matches the generator.
 - Every copied file starts with the generated-file marker and a line naming the MIT license. Stale-file deletion and `tsurara check` cover the copy like generated code: an edit fails `check`, `generate` restores it, and leaving vendoring deletes it. The runtime version marker is not written, and the version check of `check` does not apply (the copy is the version).
 - The copy is adapted only where the language requires it: TypeScript's relative imports take the import extension; Rust's `crate::`, `$crate::` and `tsurara_client::` paths become `runtimeCrate`, `#[macro_export]` macros are re-exported by path, the cargo features are resolved (the client layer only with operations, the mock transport only with `rust.mocks`, under `cfg(any(test, feature = "mocks"))`), and `clippy::collapsible_if` is allowed because the runtime keeps Rust 1.85; Go's imports of the runtime and `tsuraratest` take the vendored path.
-- Third-party dependencies are not copied: `generate` names them (httpx for Python; serde, serde_json and indexmap, and with operations tokio, fastrand, httpdate and reqwest for Rust, also listed in `mod.rs`). TypeScript and Go have none.
+- Third-party dependencies are not copied: `generate` names them (httpx for Python; serde, serde_json and indexmap, and with operations tokio, fastrand, httpdate, encoding_rs and reqwest for Rust, also listed in `mod.rs`). TypeScript and Go have none.
 - With `operations: false`, Rust copies the types layer only (18.9); TypeScript copies nothing when no file imports the runtime.
 - Each target gets its own copy. A shared location for several targets is not offered: targets of one repository that share a runtime are better served by the package.
 
@@ -428,7 +428,9 @@ Authentication follows the definition. Each OperationDef carries the operation's
 
 The type parameter `Ctx` is the type of the context passed per call, used for things like passing a per-request trace ID in SSR. Module augmentation is not used, so apps can have different types without interfering with each other.
 
-`signal`, `headers`, `timeout`, `baseUrl`, and `context` can be overridden per call through `RequestOptions`.
+`signal`, `headers`, `timeout`, `baseUrl`, `context` and `fetchOptions` can be overridden per call through `RequestOptions`. `fetchOptions` (also a client option, with the call's spread over the client's) are passed to `fetch` as they are, such as `cache`, `credentials` or Next.js's `next`; the method, headers, body, signal and redirect handling stay the client's, and middleware sees them as `req.fetchOptions`.
+
+`client.requestRaw(def, input)` runs a call through the same steps (headers, auth, middleware, redirects, timeout until the response) but returns `{ kind: 'response', ok, status, documented, response }` with the body unread, or a transport failure: for bodies that are streamed on or read in a way the definition does not describe. Generated functions do not use it, and `onResult` does not see it.
 
 ### 8.2 Result
 
@@ -438,9 +440,9 @@ The Promise returned by `client.request` never rejects. HTTP errors, network fai
 |---|---|---|---|
 | `success` | true | A success status from the definition was returned | `status`, `data`, `response` |
 | `http` | false | An error status, or a status not in the definition, was returned. Statuses not in the definition get `documented: false` and `error: unknown`. When other success statuses are defined, an undefined 2xx (such as 201 for an operation that only defines 200) also lands here | `status`, `error`, `documented`, `response` |
-| `network` | false | fetch itself failed (DNS, dropped connection, CORS, and so on) | `cause` |
-| `timeout` | false | The time given by `timeout` was exceeded | `cause` |
-| `aborted` | false | Aborted by the caller's `signal` | `cause` |
+| `network` | false | fetch itself failed (DNS, dropped connection, CORS, and so on), or the connection failed while the body was read | `cause`, and `response` when it ended the reading of the body |
+| `timeout` | false | The time given by `timeout` was exceeded | `cause`, and `response` as for `network` |
+| `aborted` | false | Aborted by the caller's `signal` | `cause`, and `response` as for `network` |
 | `parse` | false | Parsing the body failed, including when the Content-Type is not what was expected | `cause`, `response`, `contentType` |
 | `unexpected` | false | User code such as middleware threw an exception | `cause` |
 | `validation` | false | `validate` found issues in a success or documented error body (8.7) | `status`, `value`, `issues`, `response` |
@@ -481,8 +483,8 @@ Both runtimes bundle retries with the same defaults: `retry()` middleware in `@t
 
 All request and response conversion is done by `@tsurara/client` based on the OperationDef. Generated code contains no conversion logic. With the conversion logic in one place in the library, it can be tested as a whole.
 
-- Path and query: follow OpenAPI `style` (form, spaceDelimited, pipeDelimited, deepObject, and so on) and `explode`. A path parameter that is missing, or whose value would make a whole path segment empty, `.` or `..`, fails before sending (`kind: 'unexpected'`): URL parsing removes dot segments, so `id: '..'` in `/users/{id}/profile` would otherwise call `/profile`. Values are percent-encoded, `%` included, so a value such as `%2e` is sent as `%252e`. The path template must start with `/`: it is appended to the base URL as text, so `@evil.example/x` or `:8443/x` after `https://api.example.com` would change the host or the port. The model leaves out path keys without a leading `/` with an `invalid-definition` warning (webhook names and callback expressions are not paths), and every runtime refuses such an OperationDef before sending (`unexpected`).
-- Request body: JSON, `multipart/form-data`, `application/x-www-form-urlencoded`, and binary are supported. Multipart follows `encoding`: arrays are `append`ed per element, and objects are serialized with the given Content-Type.
+- Path and query: follow OpenAPI `style` (form, spaceDelimited, pipeDelimited, deepObject, and so on) and `explode`. A query parameter whose value is `null` is left out like a missing one (and so are `null` members of an `in: querystring` object): RFC 6570, which the styles come from, treats `null` as undefined, and `key=` would send an empty string the API may not accept. A path parameter that is missing, or whose value would make a whole path segment empty, `.` or `..`, fails before sending (`kind: 'unexpected'`): URL parsing removes dot segments, so `id: '..'` in `/users/{id}/profile` would otherwise call `/profile`. Values are percent-encoded, `%` included, so a value such as `%2e` is sent as `%252e`. The path template must start with `/`: it is appended to the base URL as text, so `@evil.example/x` or `:8443/x` after `https://api.example.com` would change the host or the port. The model leaves out path keys without a leading `/` with an `invalid-definition` warning (webhook names and callback expressions are not paths), and every runtime refuses such an OperationDef before sending (`unexpected`).
+- Request body: JSON, `multipart/form-data`, `application/x-www-form-urlencoded`, and binary are supported. Multipart follows `encoding`: arrays are `append`ed per element, and objects and arrays with an `encoding` Content-Type are sent as parts of that type. An object without one is sent as a field with its JSON text: `FormData` can give a part a Content-Type only by making it a file (with a file name), and many servers then take it for an uploaded file. Every runtime sends it the same way.
 - Response: the generator decides `parseAs` from the media type and writes it into the OperationDef.
 
 The following table is checked from the top, and the first matching row decides.
@@ -494,12 +496,15 @@ The following table is checked from the top, and the first matching row decides.
 | 2a | JSON Lines (`application/jsonl`, `application/x-ndjson`) and JSON text sequences (`application/json-seq`) with an item schema | `jsonLines`, `jsonSeq` | `AsyncIterable<{P}Item>` |
 | 2b | Other sequential formats (the above without an item schema) | `stream` | `ReadableStream<Uint8Array>` |
 | 3 | `application/json`, `*/*+json` | `json` | The schema type in the JSON context (6.4). Even with `format: binary` or `contentMediaType` on `type: string`, it stays `string` and is not changed to `blob` |
-| 4 | String formats such as `text/*` | `text` | `string` |
+| 4 | String formats such as `text/*`, unless the schema is binary | `text` | `string`, decoded with the `charset` of the Content-Type (UTF-8 without one) |
+| 4a | `text/*` and the other string formats with a binary schema (6.4) | `blob` | `Blob`: the bytes as they arrive, for another charset or a file to pass on |
 | 5 | Wildcards such as `*/*` and `application/*`, with a binary schema (6.4: `format: binary`, or `contentMediaType` without `contentEncoding`) | `blob` | `Blob` |
 | 6 | Wildcards with a non-binary schema | `auto` | Schema type \| `string` \| `Blob` |
 | 7 | Anything else (`application/octet-stream`, images, and so on) | `blob` | `Blob` |
 
-With `auto`, the parse method is decided by the actual Content-Type of the response: JSON media types are parsed as JSON, `text/*` is read as a string, and anything else as a `Blob`. Which one comes back is not known until runtime, so the type of data is the union of all possible values. This avoids giving a false type to values the definition allows. Wildcards are warned about, and for APIs that actually only return JSON, wildcards can be treated as JSON through configuration (work in 031, configuration in 016). If an operation treated as JSON returns a non-JSON Content-Type, the result is `kind: 'parse'`.
+A response without content in the definition is `none`, and the runtime discards its body. With `typescript.bodilessResponses: read`, the error responses among them (4xx, 5xx, and `default` when the operation has success statuses; not for `HEAD`) get `readWithContentType: true` in the OperationDef and `unknown` as their error type: a body that arrives with a Content-Type is read as `auto` would read it, so that a message the definition forgot is not lost. Runtimes that do not support the flag discard the body as before.
+
+With `auto`, the parse method is decided by the actual Content-Type of the response: JSON media types are parsed as JSON, `text/*` is read as a string, and anything else as a `Blob`. Which one comes back is not known until runtime, so the type of data is the union of all possible values. This avoids giving a false type to values the definition allows. Wildcards are warned about, and for APIs that actually only return JSON, wildcards can be treated as JSON through configuration. If an operation treated as JSON returns a non-JSON Content-Type, the result is `kind: 'parse'`.
 
 Server-Sent Events: an item schema describes one event as an object with the properties `event`, `data`, `id` and `retry`. Each entry of its `oneOf` or `anyOf` is one event, completed with the properties written next to the keyword; without them the schema is the only event. `{P}Event` is the union of the events, `{ event: 'note'; data: Note; id?: string; retry?: number } | ...`, so `switch (e.event)` narrows `data`. `event` is the union of the event's names (`const` or `enum` of `event`), or `string` for an event without one, which stands for any other name; in languages with tagged unions the events are a union tagged by `event`, named after the operation (`StreamNoteEvent`), and an event without a name is its default member. `data` whose schema has a JSON `contentMediaType` has the type of its `contentSchema` (`unknown` without one) and is parsed by the runtime; any other `data` is a `string`. The OperationDef says which events to parse: the names (`const` or `enum` of `event`) of those that are JSON, so that events the definition does not list keep their text; `jsonEvents: true` only when every event is JSON and one of them has no name, which stands for any other name. An event with JSON data but no name among events with text cannot be told apart at runtime, so its data stays a `string`, with a warning. `data` is always required, because an event without data is not dispatched (as in `EventSource`); `id` and `retry` are optional unless `required` lists them. The runtime parses the stream as the HTML standard describes and hands over an async iterable that can be read once; leaving the loop cancels the stream. Invalid JSON in an event throws from the iteration, since the Result was already returned. Events the definition does not list arrive as they are, with `data` as a string. The semantic model keeps the body kind `stream` and carries the events next to it (`MediaContent::events`); tsurara-lower marks such responses (`OperationTypes::sequences`) with the type of one item. Every runtime reads events and JSON items: `@tsurara/client` and Python hand over (async) iterators, Rust `Items<T>` with `next().await`, Go `*Items[T]` with `All()`; their timeouts cover sending and the headers but not the items, and Python, Rust and Go read every response through a streaming transport so that the items arrive as the server writes them. `parseEventStream` of `@tsurara/client` reads a byte stream without a schema the same way.
 
@@ -621,7 +626,7 @@ Generation happens once, in `packages/openapi`. app-1 and app-2 each create thei
 }
 ```
 
-This setup was checked with three apps sharing one package: React with Vite (dev server and production build, with the strict tsconfig and barrel imports), plain TypeScript with Vite (a lenient tsconfig, subpath imports, custom middleware and `retry()`), and a CLI run by Node 26 with type stripping (`nodenext`). Editing a generated file reloads the Vite page, Node runs the package through pnpm's symlinks, tree-shaking drops unused operations even through the barrel, and the workspace has one `@tsurara/client`. `examples/pnpm-monorepo` is this setup in the repository, checked in CI: a Vite app whose bundle keeps only the operations it uses, and a Node app with end-to-end tests against a local server. A Next.js app in the example (App Router, a server and a client component) builds with Turbopack and with webpack without `transpilePackages`: Next.js 16.4 compiles the `.ts` files of a linked workspace package. Its tsconfig needs `allowImportingTsExtensions` like any other consumer; without it, `next build` fails with TS5097 in the shared package. The minimum Node and TypeScript versions are checked in 034, and the two apps are checked as acceptance criteria of 024.
+This setup was checked with three apps sharing one package: React with Vite (dev server and production build, with the strict tsconfig and barrel imports), plain TypeScript with Vite (a lenient tsconfig, subpath imports, custom middleware and `retry()`), and a CLI run by Node 26 with type stripping (`nodenext`). Editing a generated file reloads the Vite page, Node runs the package through pnpm's symlinks, tree-shaking drops unused operations even through the barrel, and the workspace has one `@tsurara/client`. `examples/pnpm-monorepo` is this setup in the repository, checked in CI: a Vite app whose bundle keeps only the operations it uses, and a Node app with end-to-end tests against a local server. A Next.js app in the example (App Router, a server and a client component) builds with Turbopack and with webpack without `transpilePackages`: Next.js 16.4 compiles the `.ts` files of a linked workspace package. Its tsconfig needs `allowImportingTsExtensions` like any other consumer; without it, `next build` fails with TS5097 in the shared package.
 
 Each operation has its own file and `sideEffects: false` is set, so production bundles include only the functions used, even when importing from the barrel. However, that is about tree-shaking in production builds. Running directly in Node or in the Vite dev server loads every module the barrel references. `tsc` and editors also read every file when going through the barrel. For definitions with many operations, import directly from subpaths.
 
@@ -629,8 +634,6 @@ Each operation has its own file and `sideEffects: false` is set, so production b
 import { getPetById } from '@acme/openapi/operations/getPetById';
 import type { Pet } from '@acme/openapi/schemas/Pet';
 ```
-
-Load times through the barrel and with direct imports are measured in 025.
 
 When one shared package generates several definitions (`targets`), expose each target through its own subpath (`@acme/openapi/public`, `@acme/openapi/admin`, and so on). Each target's output has the same names, such as `BaseUrl` and `servers`, so combining them into one barrel with `export *` causes name collisions.
 
@@ -732,7 +735,7 @@ Mapping `date-time` to `Date` or `int64` to `bigint` makes the type a lie unless
 
 Mappings that do not change the runtime value, such as branded types (`string & { __brand: 'Uuid' }` and so on), are allowed.
 
-`import.from` in `typeMappings` and `x-tsurara-type` is handled as follows (work in 016).
+`import.from` in `typeMappings` and `x-tsurara-type` is handled as follows.
 
 - Relative paths starting with `.` are resolved against the configuration file they are written in, following 10.3. The generator rewrites the resolved path as a specifier relative to each generated file that uses the type.
 - Non-relative specifiers such as package names are written as is.
@@ -831,7 +834,7 @@ The other SDKs speak the same session: `tsurara-plugin` for Python (`packages/pl
   - `strict`, `erasableSyntaxOnly`, `verbatimModuleSyntax`, `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`, `isolatedDeclarations`
   - `moduleResolution` set to `nodenext` and `bundler`
 - Mapping table tests: each row of the table in 6.4 is a test with an input and the expected output. The expected output is checked against the meaning of the JSON Schema. Comparing printed type strings alone cannot catch mistakes in the expected values themselves (such as the mistake of making `prefixItems` tuples fixed-length).
-- Assignability tests: check that values the definition allows can be assigned to the generated types, and that `@ts-expect-error` holds when assigning values it does not allow (work in 035). There is no promise that TypeScript can check every constraint. For constraints approximated in 6.4.1, the tests state that values are accepted as an approximation.
+- Assignability tests: check that values the definition allows can be assigned to the generated types, and that `@ts-expect-error` holds when assigning values it does not allow. There is no promise that TypeScript can check every constraint. For constraints approximated in 6.4.1, the tests state that values are accepted as an approximation.
 - Type stripping check: check in CI that the output can be imported and run with Node type stripping, and that it passes `tsc` with both the minimum supported TypeScript version (5.8) and the version used for development (`crates/tsurara-lang-typescript/tests/type_stripping.rs`; every tsc test runs both versions).
 - Property-based tests: generate from randomly built schemas and check that `tsc` passes. `crates/tsurara-cli/tests/properties.rs` builds definitions with proptest (compositions, nullable values, references with cycles, readOnly and writeOnly, discriminators, names that stress naming), checks all cases in one run of `tsc` (strictest tsconfig) and pyright, and shrinks a failing case one checker run per step; the smallest definition is saved in `target/proptest-failures` to be added to `corpus/edge-cases`. CI runs 48 cases with a fixed seed, and a weekly workflow 2000 with a new seed (`TSURARA_PROPTEST_CASES`, `TSURARA_PROPTEST_SEED`). It found the aliases that refer to themselves through references, which now become `unknown` or lose those references with a warning.
 - Snapshot tests: save the full output and detect unintended changes.
@@ -922,11 +925,11 @@ Validation responsibilities are divided as follows. tsurara generates types and 
 | Minimum TypeScript and Node versions | TypeScript 5.8 or later, Node 22 or later | Chapter 17 |
 | Whether to make a parent with a discriminator a union of the children that inherit it through allOf | No. A discriminator does not change the validation result, so only the discriminating literal is added | 6.5 |
 | `nullable` written as a sibling of `$ref` in 3.0 | Ignore it per the specification and warn. There is no compatibility mode that honors siblings | 6.3 |
-| When a derived type name collides with another name | The other name keeps it; the derived name gets `Operation` before its suffix, with a warning (following kubb) | 6.6 |
+| When a derived type name collides with another name | The other name keeps it; the derived name gets `Operation` before its suffix, with a warning | 6.6 |
 | A named schema used both inside JSON and as a multipart body, with binary parts | The named type follows JSON (`string`); the multipart body expands the schema inline with `Blob \| File` for its binary parts | 6.4 |
 | Handling wildcard media types | Parse by the actual Content-Type (`auto`), and make the type the union of possible values. Can be treated as JSON through configuration | 8.5 |
 | Generating languages other than TypeScript | A language-neutral semantic model, shared naming, lowering and runtime contract, and one backend per language; TypeScript first, Python second | 18 |
-| Open questions of the multi-language design (Q1 to Q7) | See 18.16 | 18.16 |
+| Open questions of the multi-language design (Q1 to Q7) | See 18.15 | 18.15 |
 
 ## 17. Supported environments
 
@@ -935,7 +938,7 @@ Validation responsibilities are divided as follows. tsurara generates types and 
 | TypeScript | 5.8 | The version that introduced `erasableSyntaxOnly`. Development uses 7.0.2; CI type-checks with both |
 | Node | 22 | Node 20 support ended in April 2026. Running generated code directly with type stripping requires 22.18 or later |
 | Rust (building the generator) | 1.85 | Uses edition 2024 |
-| Python (generated code and `tsurara-client`) | 3.11 | 18.16, Q2 |
+| Python (generated code and `tsurara-client`) | 3.11 | 18.15, Q2 |
 
 `@tsurara/client` needs `fetch`, `Request`, `Response`, `Headers`, `AbortController` and `URL` (only its constructor). `ReadableStream`, `Blob`, `FormData`, `URLSearchParams`, `AbortSignal.any` and `DOMException` are used when they exist, so the client also runs where some are missing, as in React Native: requests, timeouts and aborts work without them, and React Native file objects (`{ uri, name, type }`, passed through `reactNativeFile`) are uploaded as file parts. Streaming responses need a `fetch` with streaming bodies (`expo/fetch` in Expo); without one, `parseAs: 'stream'` returns `kind: 'parse'`. On Hermes, `runtimes/typescript/hermes` (`@tsurara/hermes-check`) bundles the client with React Native's own `fetch`, `FormData` and `URL` polyfills and its Babel preset, as Metro does: React Native 0.88's `hermesc` compiles it, and the VM of the last Hermes CLI release (v0.13.0, from the time of React Native 0.75) runs JSON calls, basic authentication, multipart uploads with `reactNativeFile`, timeouts, aborts and the `parse` failure of a stream without a streaming `fetch`. React Native and Expo have not been checked on a device yet.
 
@@ -1008,7 +1011,7 @@ input
 | `tsurara-cli` | The `tsurara` command. It depends on every built-in `tsurara-lang-<language>` crate and owns the registry that maps `language` values to backends, so no crate below it depends on a language crate |
 | `tsurara-testkit` | Per-language checkers (18.12) |
 
-The former `tsurara-codegen` crate is gone: its analysis moved to `tsurara-sem` and `emit.rs` to `tsurara-lang-typescript`. Naming moved to `tsurara-naming` and the TypeScript backend. `ir.rs` is the language-neutral type IR of the model, used by `tsurara-lower` and every backend; only its variants `Undefined`, `Ref`, `External` and `Builtin` belong to the TypeScript lowering (they never appear in the model and are not serialized). `print.rs` (TypeScript type printing, which normalization also uses for a stable member order) and `options.rs` (the common options) stay in `tsurara-sem` as well; 043 to 045 moved the TypeScript-only options and naming out and left these.
+The former `tsurara-codegen` crate is gone: its analysis moved to `tsurara-sem` and `emit.rs` to `tsurara-lang-typescript`. Naming moved to `tsurara-naming` and the TypeScript backend. `ir.rs` is the language-neutral type IR of the model, used by `tsurara-lower` and every backend; only its variants `Undefined`, `Ref`, `External` and `Builtin` belong to the TypeScript lowering (they never appear in the model and are not serialized). `print.rs` (TypeScript type printing, which normalization also uses for a stable member order) and `options.rs` (the common options) stay in `tsurara-sem` as well, while the TypeScript-only options and naming moved out.
 
 ```rust
 pub trait Backend {
@@ -1422,34 +1425,7 @@ TypeScript comes first: it is rebuilt on the shared crates and stays the referen
 
 Python has structural unions and multiple inheritance, so it does not exercise the fallbacks for languages without unions or inheritance (Go, Java, C#, GDScript). Those passes are covered by lowering tests with small capability sets until such a language is added.
 
-### 18.15 Migration plan
-
-Refactoring steps keep the TypeScript output byte-identical (every existing snapshot unchanged). Steps that change it on purpose say so. 041 depends on 029 because today a `contentMediaType` string inside JSON becomes `Blob | File` (`table.yaml` expects it); 029 changes those snapshots on purpose and is reviewed on its own, so that 041 can keep the rest unchanged.
-
-| Issue | Change | Depends on |
-|---|---|---|
-| 036 | Decide the open questions; merge this document into design.md | — |
-| 037 | Split into crates; `Backend` trait and registry; TypeScript moves to `tsurara-lang-typescript` | 036 |
-| 038 | Integer, number and format in the model | 037 |
-| 039 | Explicit enum node | 037 |
-| 040 | Structured discriminator; `allOf` structure kept | 037 |
-| 041 | `Binary`, `BodyKind`, per-language external types | 037, 016, 029 |
-| 042 | `tsurara-naming`: contexts, scopes, `NamingPolicy`, wire names; the model holds no identifiers | 038–041, 032 |
-| 043 | Semantic and backend warnings | 042, 015 |
-| 044 | Configuration: `language`, language sections, removed top-level keys | 042, 016 |
-| 045 | Serializable, versioned semantic model | 042 |
-| 047 | Runtime contract: OperationDef schema, Result kinds, runtime capabilities, conformance vectors; move `@tsurara/client` | 036 |
-| 048 | Hoisting candidates with preferred names | 042 |
-| 049 | Backend markers and sidecars in the CLI | 037 |
-| 050 | Semantic case tests, per-language expectations, checker framework | 045 |
-| 051 | `tsurara-lower`: `tir`, capabilities, shared passes, validator | 048 |
-| 052 | TypeDef format, operation bindings, decode and encode vectors | 047, 051 |
-| 053 | `tsurara-pretty`; port the TypeScript printer | 037 |
-| 054 | External backend protocol with `describe` | 045, 044, 049 |
-| 055 | Python backend, types only | 043, 044, 049, 050, 051, 052, 053 |
-| 056 | `transformModel` hook | 045, 017 |
-
-### 18.16 Decisions
+### 18.15 Decisions
 
 Decided on 2026-11-10 (the proposals of the earlier draft were adopted).
 

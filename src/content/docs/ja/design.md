@@ -1,7 +1,7 @@
 ---
 title: "設計"
 sourcePath: docs/design.md
-sourceHash: 7153d85fc480
+sourceHash: 6e2c6f2019ac
 ---
 
 この文書は、OpenAPIの定義からTypeScriptの型とAPIの呼び出し関数を生成するツール、tsuraraの設計を述べる。
@@ -197,9 +197,9 @@ OpenAPIのスキーマをそのままTypeScriptとして書くと、スキーマ
 
 どの値も満たせない組み合わせは `never` になる。`minItems` が `maxItems` より大きい場合と、`items: false` で `minItems` が `prefixItems` の数を超える場合である。
 
-IRのタプルは、要素の型のリストに加えて必須の要素の数を持つ（028での作業）。
+IRのタプルは、要素の型のリストに加えて必須の要素の数を持つ。
 
-値がバイナリかどうかは、現れる場所で決まる。JSONの中で `type: string` と宣言された値はJSONの文字列として届くので、`contentMediaType: text/html` や `format: binary` があっても `string` である。`Blob | File` になるのは、リクエストやレスポンスの本文そのもの（`application/octet-stream` など）とマルチパートのパートの値だけである。パートの値とは、マルチパートの本文のスキーマのトップレベルのプロパティと、その中の配列の項目で、`$ref` をたどった先も含む。名前付きのオブジェクトスキーマで、その使われ方（すべての文書のすべての `$ref` と判別子のマッピング）がすべてマルチパートのリクエストの本文であるものは、パートの値を持つ型として宣言し、それらの本文はその型を参照する。それ以外の名前付きのスキーマはJSONの値として変換するので、JSONの中のどこで使われてもその型は正しい。マルチパートの本文がそうしたスキーマを参照していて、そのスキーマにバイナリのパートの値があるときは、本文の型はそのスキーマを参照せず、それらのパートを `Blob | File` にしてインラインに展開する。名前付きの型は変えず、誤った型も出力しない（029で決定）。
+値がバイナリかどうかは、現れる場所で決まる。JSONの中で `type: string` と宣言された値はJSONの文字列として届くので、`contentMediaType: text/html` や `format: binary` があっても `string` である。`Blob | File` になるのは、リクエストやレスポンスの本文そのもの（`application/octet-stream` など）とマルチパートのパートの値だけである。パートの値とは、マルチパートの本文のスキーマのトップレベルのプロパティと、その中の配列の項目で、`$ref` をたどった先も含む。名前付きのオブジェクトスキーマで、その使われ方（すべての文書のすべての `$ref` と判別子のマッピング）がすべてマルチパートのリクエストの本文であるものは、パートの値を持つ型として宣言し、それらの本文はその型を参照する。それ以外の名前付きのスキーマはJSONの値として変換するので、JSONの中のどこで使われてもその型は正しい。マルチパートの本文がそうしたスキーマを参照していて、そのスキーマにバイナリのパートの値があるときは、本文の型はそのスキーマを参照せず、それらのパートを `Blob | File` にしてインラインに展開する。名前付きの型は変えず、誤った型も出力しない。
 
 #### 6.4.1 正確に表すもの、近似するもの、拒否するもの {#641-what-is-exact-what-is-approximated-and-what-is-rejected}
 
@@ -222,7 +222,7 @@ discriminator：`oneOf`/`anyOf` に判別子があるとき、各メンバーに
 
 readOnly/writeOnly：どちらかを持つスキーマ（参照先を通じて持つものを含む）には、元の型に加えて `PetWritable` を生成する。元の型はレスポンスで使い、writeOnlyのプロパティを除く。`Writable` の型はリクエストで使い、readOnlyのプロパティを除く。どちらも持たないスキーマには `Writable` の型を作らない。この分割は設定で無効にでき、その場合はreadOnly/writeOnlyを無視して型を1つだけ出力する。
 
-スキーマがreadOnly/writeOnlyを持つかどうかは、参照のグラフ全体で決める。AがBを参照し、BがAを参照するような相互参照では、強連結成分ごとに結果が変わらなくなるまで計算を繰り返す。検査の途中の仮の結果を確定したものとして扱ってはいけない。仮の結果で確定すると、相互参照の向こう側にあるreadOnlyのプロパティがリクエストの型に残ってしまう（030での作業）。
+スキーマがreadOnly/writeOnlyを持つかどうかは、参照のグラフ全体で決める。AがBを参照し、BがAを参照するような相互参照では、強連結成分ごとに結果が変わらなくなるまで計算を繰り返す。検査の途中の仮の結果を確定したものとして扱ってはいけない。仮の結果で確定すると、相互参照の向こう側にあるreadOnlyのプロパティがリクエストの型に残ってしまう。
 
 スキーマにreadOnlyのプロパティを1つ足すだけで、そのスキーマへの参照のリクエスト側の型名が `X` から `XWritable` に変わる。これは命名の規則どおりだが、利用者のコードにとっては互換性のない変更である（14章）。
 
@@ -238,7 +238,7 @@ readOnly/writeOnly：どちらかを持つスキーマ（参照先を通じて�
 
 予約語やグローバルと衝突する名前には接尾辞 `Model` を付ける（`Error` → `ErrorModel`、`Date` → `DateModel`）。接尾辞を付けてもほかの名前と衝突するときは、`2`、`3` などを付け足す。避けた衝突は警告として報告し（6.8）、`naming.overrides` で別の名前に固定できる。
 
-操作から導いた型名（`{P}Data`、`{P}Responses`、`{P}Errors`、`{P}Result`、`{P}ResponseHeaders`、`{}Def`、webhookとコールバックの型）がすでに使われている場合（たいていはスキーマ）は、スキーマが名前を保ち、導いた名前だけをずらす。接尾辞の前に `Operation` を入れ（`ListPetsOperationResult`）、それも使われていれば番号を付ける。関数名とほかの導いた名前は変わらないので、`ListPetsResult` という名前のスキーマを追加しても、関数 `listPets` が `listPets2` に変わることはない。`renamed` の警告が両方の名前を示し、`naming.overrides` で別の名前を選べる。これはkubbの衝突検出（種類をまたぐ場合は意味のある接尾辞、同じ種類の中では番号）にならったものである。最初の方針では生成をエラーで止めていたが、OpenAIの定義にはこうした衝突が10個ある（`UsageCompletionsResult` はスキーマであり、`usageCompletions` の結果でもある）ので、064で変更した。
+操作から導いた型名（`{P}Data`、`{P}Responses`、`{P}Errors`、`{P}Result`、`{P}ResponseHeaders`、`{}Def`、webhookとコールバックの型）がすでに使われている場合（たいていはスキーマ）は、スキーマが名前を保ち、導いた名前だけをずらす。接尾辞の前に `Operation` を入れ（`ListPetsOperationResult`）、それも使われていれば番号を付ける。関数名とほかの導いた名前は変わらないので、`ListPetsResult` という名前のスキーマを追加しても、関数 `listPets` が `listPets2` に変わることはない。`renamed` の警告が両方の名前を示し、`naming.overrides` で別の名前を選べる。最初の方針では生成をエラーで止めていたが、OpenAIの定義にはこうした衝突が10個ある（`UsageCompletionsResult` はスキーマであり、`usageCompletions` の結果でもある）ので、変更した。
 
 名前については、決定性と安定性を分けて考える。
 
@@ -389,7 +389,7 @@ export function getPetById<Ctx>(
 - ソースはビルド時にバイナリに埋め込む（`tsurara-runtimes`。`runtimes/` を対象とするビルドスクリプトで、テストは除く）。そのためコピーは常に生成器と一致する。
 - コピーしたファイルはすべて、生成ファイルの目印と、MITライセンスを示す行で始まる。古いファイルの削除と `tsurara check` は、生成コードと同じくコピーも対象にする。編集すれば `check` が失敗し、`generate` が元に戻し、vendoringをやめれば削除される。ランタイムのバージョンの目印は書かず、`check` のバージョンの検査も適用しない（コピーそのものがそのバージョンだからである）。
 - コピーに手を加えるのは、言語が必要とする箇所だけである。TypeScriptの相対importにはimportの拡張子を付ける。Rustでは、`crate::`、`$crate::`、`tsurara_client::` のパスを `runtimeCrate` にし、`#[macro_export]` のマクロをパスで再exportし、cargoのフィーチャーを解決し（クライアントの層は操作があるときだけ、モックのトランスポートは `rust.mocks` のときだけ `cfg(any(test, feature = "mocks"))` の下に置く）、ランタイムがRust 1.85を保っているので `clippy::collapsible_if` を許可する。Goでは、ランタイムと `tsuraratest` のimportをvendorしたパスにする。
-- サードパーティの依存関係はコピーしない。`generate` がそれを示す（Pythonはhttpx、Rustはserde、serde_json、indexmap、操作があればtokio、fastrand、httpdate、reqwest。Rustでは `mod.rs` にも書く）。TypeScriptとGoには依存関係がない。
+- サードパーティの依存関係はコピーしない。`generate` がそれを示す（Pythonはhttpx、Rustはserde、serde_json、indexmap、操作があればtokio、fastrand、httpdate、encoding_rs、reqwest。Rustでは `mod.rs` にも書く）。TypeScriptとGoには依存関係がない。
 - `operations: false` では、Rustは型の層だけをコピーする（18.9）。TypeScriptは、ランタイムをimportするファイルがなければ何もコピーしない。
 - コピーはターゲットごとに持つ。複数のターゲットで共有する置き場所は用意しない。1つのリポジトリの中でランタイムを共有するターゲットには、パッケージのほうが向いている。
 
@@ -428,7 +428,9 @@ const api = createClient<{ traceparent?: string }>({
 
 型パラメーター `Ctx` は呼び出しごとに渡すcontextの型で、SSRでリクエストごとのトレースIDを渡すような用途に使う。モジュール拡張（module augmentation）は使わないので、アプリごとに異なる型を持っても互いに干渉しない。
 
-`signal`、`headers`、`timeout`、`baseUrl`、`context` は、`RequestOptions` で呼び出しごとに上書きできる。
+`signal`、`headers`、`timeout`、`baseUrl`、`context`、`fetchOptions` は、`RequestOptions` で呼び出しごとに上書きできる。`fetchOptions`（クライアントのオプションでもあり、呼び出しのものをクライアントのものの上に重ねる）はそのまま `fetch` に渡す。`cache`、`credentials`、Next.jsの `next` などである。メソッド、ヘッダー、本文、シグナル、リダイレクトの扱いはクライアントが決め、ミドルウェアからは `req.fetchOptions` として見える。
+
+`client.requestRaw(def, input)` は呼び出しを同じ手順（ヘッダー、認証、ミドルウェア、リダイレクト、応答までのタイムアウト）で送るが、本文を読まないまま `{ kind: 'response', ok, status, documented, response }` を返すか、トランスポートの失敗を返す。応答をそのまま流す本文や、定義に書かれていない方法で読む本文のためのものである。生成された関数はこれを使わず、`onResult` もこれを受け取らない。
 
 ### 8.2 Result {#82-result}
 
@@ -438,9 +440,9 @@ const api = createClient<{ traceparent?: string }>({
 |---|---|---|---|
 | `success` | true | 定義にある成功のステータスが返った | `status`、`data`、`response` |
 | `http` | false | エラーのステータス、または定義にないステータスが返った。定義にないステータスは `documented: false` と `error: unknown` になる。ほかの成功のステータスが定義されているときは、定義にない2xx（200だけを定義した操作での201など）もここに入る | `status`、`error`、`documented`、`response` |
-| `network` | false | fetch自体が失敗した（DNS、接続の切断、CORSなど） | `cause` |
-| `timeout` | false | `timeout` で指定した時間を超えた | `cause` |
-| `aborted` | false | 呼び出し側の `signal` で中断された | `cause` |
+| `network` | false | fetch自体が失敗した（DNS、接続の切断、CORSなど）、または本文を読んでいる間に接続が失敗した | `cause`。本文の読み込みを終わらせたときは `response` も |
+| `timeout` | false | `timeout` で指定した時間を超えた | `cause`。`network` と同じく `response` も |
+| `aborted` | false | 呼び出し側の `signal` で中断された | `cause`。`network` と同じく `response` も |
 | `parse` | false | 本文の解析に失敗した。Content-Typeが想定と異なる場合を含む | `cause`、`response`、`contentType` |
 | `unexpected` | false | ミドルウェアなど利用者のコードが例外を投げた | `cause` |
 | `validation` | false | `validate` が成功の本文か定義にあるエラーの本文に問題を見つけた（8.7） | `status`、`value`、`issues`、`response` |
@@ -481,8 +483,8 @@ Resultでない値を渡すと、代わりに `TypeError` を投げる。よく�
 
 リクエストとレスポンスの変換は、すべて `@tsurara/client` がOperationDefに基づいて行う。生成コードには変換の処理を含めない。変換の処理がライブラリの1か所にあれば、まとめてテストできる。
 
-- パスとクエリ：OpenAPIの `style`（form、spaceDelimited、pipeDelimited、deepObjectなど）と `explode` に従う。パスパラメーターがない場合や、値によってパスのセグメント全体が空、`.`、`..` になる場合は、送信前に失敗する（`kind: 'unexpected'`）。URLの解析はドットセグメントを取り除くので、そうしなければ `/users/{id}/profile` の `id: '..'` は `/profile` を呼んでしまう。値は `%` も含めてパーセントエンコードするので、`%2e` のような値は `%252e` として送られる。パスのテンプレートは `/` で始まらなければならない。テンプレートはベースURLに文字列として付け足すので、`https://api.example.com` のあとの `@evil.example/x` や `:8443/x` はホストやポートを変えてしまう。モデルは先頭に `/` のないパスのキーを `invalid-definition` の警告とともに除き（webhookの名前やコールバックの式はパスではない）、どのランタイムもそうしたOperationDefを送信前に拒否する（`unexpected`）。
-- リクエストの本文：JSON、`multipart/form-data`、`application/x-www-form-urlencoded`、バイナリに対応する。マルチパートは `encoding` に従う。配列は要素ごとに `append` し、オブジェクトは指定されたContent-Typeでシリアライズする。
+- パスとクエリ：OpenAPIの `style`（form、spaceDelimited、pipeDelimited、deepObjectなど）と `explode` に従う。値が `null` のクエリパラメーターは、値がない場合と同じく送らない（`in: querystring` のオブジェクトの `null` のメンバーも同じ）。スタイルの元であるRFC 6570は `null` を未定義として扱い、`key=` はAPIが受け付けないかもしれない空文字列を送ることになるからである。パスパラメーターがない場合や、値によってパスのセグメント全体が空、`.`、`..` になる場合は、送信前に失敗する（`kind: 'unexpected'`）。URLの解析はドットセグメントを取り除くので、そうしなければ `/users/{id}/profile` の `id: '..'` は `/profile` を呼んでしまう。値は `%` も含めてパーセントエンコードするので、`%2e` のような値は `%252e` として送られる。パスのテンプレートは `/` で始まらなければならない。テンプレートはベースURLに文字列として付け足すので、`https://api.example.com` のあとの `@evil.example/x` や `:8443/x` はホストやポートを変えてしまう。モデルは先頭に `/` のないパスのキーを `invalid-definition` の警告とともに除き（webhookの名前やコールバックの式はパスではない）、どのランタイムもそうしたOperationDefを送信前に拒否する（`unexpected`）。
+- リクエストの本文：JSON、`multipart/form-data`、`application/x-www-form-urlencoded`、バイナリに対応する。マルチパートは `encoding` に従う。配列は要素ごとに `append` し、`encoding` にContent-Typeのあるオブジェクトと配列はその型のパートとして送る。Content-Typeのないオブジェクトは、JSONのテキストを値とするフィールドとして送る。`FormData` がパートにContent-Typeを付けるにはファイル（ファイル名付き）にするしかなく、多くのサーバーはそれをアップロードされたファイルとみなすからである。どのランタイムも同じように送る。
 - レスポンス：生成器がメディアタイプから `parseAs` を決め、OperationDefに書き込む。
 
 次の表は上から確かめ、最初に一致した行で決まる。
@@ -494,12 +496,15 @@ Resultでない値を渡すと、代わりに `TypeError` を投げる。よく�
 | 2a | 項目のスキーマを持つJSON Lines（`application/jsonl`、`application/x-ndjson`）とJSON text sequences（`application/json-seq`） | `jsonLines`、`jsonSeq` | `AsyncIterable<{P}Item>` |
 | 2b | そのほかのシーケンシャルな形式（上のもので項目のスキーマがないもの） | `stream` | `ReadableStream<Uint8Array>` |
 | 3 | `application/json`、`*/*+json` | `json` | JSONの文脈でのスキーマの型（6.4）。`type: string` に `format: binary` や `contentMediaType` があっても `string` のままで、`blob` には変えない |
-| 4 | `text/*` などの文字列の形式 | `text` | `string` |
+| 4 | `text/*` などの文字列の形式（スキーマがバイナリでないもの） | `text` | `string`。Content-Typeの `charset` で読む（なければUTF-8） |
+| 4a | スキーマがバイナリ（6.4）の `text/*` などの文字列の形式 | `blob` | `Blob`。ほかの文字コードや、そのまま渡すファイルのために、届いたままのバイトを持つ |
 | 5 | `*/*` や `application/*` などのワイルドカードで、スキーマがバイナリ（6.4：`format: binary`、または `contentEncoding` のない `contentMediaType`） | `blob` | `Blob` |
 | 6 | ワイルドカードで、スキーマがバイナリでない | `auto` | スキーマの型 \| `string` \| `Blob` |
 | 7 | それ以外（`application/octet-stream`、画像など） | `blob` | `Blob` |
 
-`auto` では、解析の方法をレスポンスの実際のContent-Typeで決める。JSONのメディアタイプならJSONとして解析し、`text/*` なら文字列として、それ以外なら `Blob` として読む。どれが返るかは実行時までわからないので、dataの型はありうる値すべてのunionにする。こうすれば、定義が許す値に誤った型を付けずに済む。ワイルドカードには警告を出し、実際にはJSONしか返さないAPI向けに、設定でワイルドカードをJSONとして扱えるようにしている（031での作業、016での設定）。JSONとして扱う操作がJSONでないContent-Typeを返したら、結果は `kind: 'parse'` になる。
+定義に内容のない応答は `none` で、ランタイムは本文を捨てる。`typescript.bodilessResponses: read` にすると、そのうちエラーの応答（4xx、5xx、操作に成功のステータスがあるときの `default`。`HEAD` は除く）は、OperationDefに `readWithContentType: true` を持ち、エラーの型が `unknown` になる。Content-Type付きで届いた本文は `auto` と同じように読むので、定義が書き漏らしたメッセージを失わない。このフラグに対応しないランタイムは、これまでどおり本文を捨てる。
+
+`auto` では、解析の方法をレスポンスの実際のContent-Typeで決める。JSONのメディアタイプならJSONとして解析し、`text/*` なら文字列として、それ以外なら `Blob` として読む。どれが返るかは実行時までわからないので、dataの型はありうる値すべてのunionにする。こうすれば、定義が許す値に誤った型を付けずに済む。ワイルドカードには警告を出し、実際にはJSONしか返さないAPI向けに、設定でワイルドカードをJSONとして扱えるようにしている。JSONとして扱う操作がJSONでないContent-Typeを返したら、結果は `kind: 'parse'` になる。
 
 Server-Sent Events：項目のスキーマは、1つのイベントを、プロパティ `event`、`data`、`id`、`retry` を持つオブジェクトとして記述する。その `oneOf` か `anyOf` の各エントリが1つのイベントで、キーワードの隣に書かれたプロパティで補われる。それらがなければ、スキーマそのものが唯一のイベントである。`{P}Event` はイベントのunion `{ event: 'note'; data: Note; id?: string; retry?: number } | ...` なので、`switch (e.event)` で `data` が絞り込まれる。`event` はそのイベントの名前（`event` の `const` か `enum`）のunionで、名前のないイベントでは `string` になり、ほかのあらゆる名前を表す。タグ付きunionを持つ言語では、イベントは `event` でタグ付けされた、操作にちなんだ名前（`StreamNoteEvent`）のunionで、名前のないイベントはそのデフォルトのメンバーになる。スキーマにJSONの `contentMediaType` がある `data` は、その `contentSchema` の型（なければ `unknown`）を持ち、ランタイムが解析する。それ以外の `data` は `string` である。OperationDefは、どのイベントを解析するかを示す。JSONであるイベントの名前（`event` の `const` か `enum`）を並べ、定義に挙がっていないイベントがテキストのままになるようにする。`jsonEvents: true` は、すべてのイベントがJSONで、そのどれかに名前がない（ほかのあらゆる名前を表す）場合に限る。テキストのイベントの中にある、JSONのデータを持つ名前のないイベントは、実行時に区別できないので、その `data` は `string` のままにして警告を出す。データのないイベントは配送されない（`EventSource` と同じ）ので、`data` は常に必須である。`id` と `retry` は、`required` に挙がっていなければ省略可能である。ランタイムはHTML標準のとおりにストリームを解析し、1回だけ読める非同期イテラブルを渡す。ループを抜けるとストリームはキャンセルされる。Resultはすでに返しているので、イベントのJSONが不正なら反復の中で例外を投げる。定義に挙がっていないイベントは、`data` が文字列のままそのまま届く。セマンティックモデルは本文の種類を `stream` のままにして、その隣にイベントを持つ（`MediaContent::events`）。tsurara-lowerはそうしたレスポンスに印を付け（`OperationTypes::sequences`）、1項目の型を持たせる。どのランタイムもイベントとJSONの項目を読む。`@tsurara/client` とPythonは（非同期の）イテレーターを、Rustは `next().await` で読む `Items<T>` を、Goは `All()` で読む `*Items[T]` を渡す。タイムアウトは送信とヘッダーまでを対象にし、項目は対象にしない。Python、Rust、Goは、サーバーが書くそばから項目が届くように、すべてのレスポンスをストリーミングのトランスポートで読む。`@tsurara/client` の `parseEventStream` は、スキーマのないバイト列のストリームを同じ方法で読む。
 
@@ -621,7 +626,7 @@ apps/app-2/src/api.ts              app-2 のクライアント
 }
 ```
 
-この構成は、1つのパッケージを共有する3つのアプリで確かめた。Viteを使うReact（開発サーバーと本番ビルド。厳格なtsconfigとbarrelからのimport）、Viteを使う素のTypeScript（緩いtsconfig、サブパスからのimport、独自のミドルウェアと `retry()`）、Node 26の型ストリッピングで実行するCLI（`nodenext`）である。生成ファイルを編集するとViteのページが再読み込みされ、Nodeはpnpmのシンボリックリンクを通してパッケージを実行し、tree-shakingはbarrelを経由していても使われない操作を除き、ワークスペースの `@tsurara/client` は1つになる。`examples/pnpm-monorepo` はリポジトリの中のこの構成で、CIで確かめている。使う操作だけがバンドルに残るViteのアプリと、ローカルのサーバーに対するエンドツーエンドのテストを持つNodeのアプリがある。サンプルのNext.jsのアプリ（App Router、サーバーコンポーネントとクライアントコンポーネント）は、`transpilePackages` なしでTurbopackでもwebpackでもビルドできる。Next.js 16.4は、リンクされたワークスペースのパッケージの `.ts` ファイルをコンパイルする。そのtsconfigには、ほかの利用側と同じく `allowImportingTsExtensions` が必要で、これがないと `next build` が共有パッケージの中でTS5097で失敗する。NodeとTypeScriptの最低バージョンは034で確かめ、2つのアプリは024の受け入れ条件として確かめている。
+この構成は、1つのパッケージを共有する3つのアプリで確かめた。Viteを使うReact（開発サーバーと本番ビルド。厳格なtsconfigとbarrelからのimport）、Viteを使う素のTypeScript（緩いtsconfig、サブパスからのimport、独自のミドルウェアと `retry()`）、Node 26の型ストリッピングで実行するCLI（`nodenext`）である。生成ファイルを編集するとViteのページが再読み込みされ、Nodeはpnpmのシンボリックリンクを通してパッケージを実行し、tree-shakingはbarrelを経由していても使われない操作を除き、ワークスペースの `@tsurara/client` は1つになる。`examples/pnpm-monorepo` はリポジトリの中のこの構成で、CIで確かめている。使う操作だけがバンドルに残るViteのアプリと、ローカルのサーバーに対するエンドツーエンドのテストを持つNodeのアプリがある。サンプルのNext.jsのアプリ（App Router、サーバーコンポーネントとクライアントコンポーネント）は、`transpilePackages` なしでTurbopackでもwebpackでもビルドできる。Next.js 16.4は、リンクされたワークスペースのパッケージの `.ts` ファイルをコンパイルする。そのtsconfigには、ほかの利用側と同じく `allowImportingTsExtensions` が必要で、これがないと `next build` が共有パッケージの中でTS5097で失敗する。
 
 各操作は独自のファイルを持ち、`sideEffects: false` を設定しているので、barrelからimportしても、本番のバンドルには使った関数だけが入る。ただしそれは本番ビルドのtree-shakingの話である。Nodeでの直接実行やViteの開発サーバーでは、barrelが参照するすべてのモジュールを読み込む。`tsc` とエディタも、barrelを経由するとすべてのファイルを読む。操作の多い定義では、サブパスから直接importする。
 
@@ -629,8 +634,6 @@ apps/app-2/src/api.ts              app-2 のクライアント
 import { getPetById } from '@acme/openapi/operations/getPetById';
 import type { Pet } from '@acme/openapi/schemas/Pet';
 ```
-
-barrelを経由した場合と直接importした場合の読み込み時間は、025で測っている。
 
 1つの共有パッケージで複数の定義を生成する（`targets`）ときは、ターゲットごとに独自のサブパス（`@acme/openapi/public`、`@acme/openapi/admin` など）で公開する。各ターゲットの出力は `BaseUrl` や `servers` のような同じ名前を持つので、`export *` で1つのbarrelにまとめると名前が衝突する。
 
@@ -732,7 +735,7 @@ targets:
 
 ブランド付きの型（`string & { __brand: 'Uuid' }` など）のように、実行時の値を変えないマッピングは許す。
 
-`typeMappings` と `x-tsurara-type` の `import.from` は次のように扱う（016での作業）。
+`typeMappings` と `x-tsurara-type` の `import.from` は次のように扱う。
 
 - `.` で始まる相対パスは、10.3に従い、それが書かれた設定ファイルを基準に解決する。生成器は解決したパスを、その型を使う各生成ファイルからの相対の指定子に書き換える。
 - パッケージ名のような相対でない指定子は、そのまま書く。
@@ -831,7 +834,7 @@ extendの段階は、バックエンドのあと、`transformFiles` の前に実
   - `strict`、`erasableSyntaxOnly`、`verbatimModuleSyntax`、`exactOptionalPropertyTypes`、`noUncheckedIndexedAccess`、`isolatedDeclarations`
   - `moduleResolution` を `nodenext` と `bundler` にしたもの
 - 対応表のテスト：6.4の表の各行が、入力と期待する出力を持つテストである。期待する出力は、JSON Schemaの意味に照らして確かめる。出力した型の文字列を比べるだけでは、期待する値そのものの誤り（`prefixItems` のタプルを固定長にする誤りなど）を見つけられない。
-- 代入可能性のテスト：定義が許す値を生成された型に代入できること、許さない値を代入すると `@ts-expect-error` が成り立つことを確かめる（035での作業）。TypeScriptがすべての制約を検査できるとは約束しない。6.4.1で近似する制約については、近似として値を受け入れることをテストに明記する。
+- 代入可能性のテスト：定義が許す値を生成された型に代入できること、許さない値を代入すると `@ts-expect-error` が成り立つことを確かめる。TypeScriptがすべての制約を検査できるとは約束しない。6.4.1で近似する制約については、近似として値を受け入れることをテストに明記する。
 - 型ストリッピングの確認：出力をNodeの型ストリッピングでimportして実行できること、そして対応する最低のTypeScriptのバージョン（5.8）と開発に使うバージョンの両方で `tsc` を通ることを、CIで確かめる（`crates/tsurara-lang-typescript/tests/type_stripping.rs`。tscのテストはすべて両方のバージョンで実行する）。
 - プロパティベースのテスト：ランダムに作ったスキーマから生成し、`tsc` を通ることを確かめる。`crates/tsurara-cli/tests/properties.rs` はproptestで定義を作り（合成、null許容の値、循環のある参照、readOnlyとwriteOnly、判別子、命名に負荷をかける名前）、すべてのケースを1回の `tsc`（最も厳しいtsconfig）とpyrightの実行で確かめ、失敗したケースを1段階ごとに1回の検査で縮める。最小の定義は `target/proptest-failures` に保存し、`corpus/edge-cases` に追加する。CIは固定のシードで48ケースを、毎週のworkflowは新しいシードで2000ケースを実行する（`TSURARA_PROPTEST_CASES`、`TSURARA_PROPTEST_SEED`）。このテストは、参照を通して自分自身を参照するエイリアスを見つけた。そうしたエイリアスは今では `unknown` になるか、警告を出してその参照を失う。
 - スナップショットのテスト：出力全体を保存し、意図しない変更を検出する。
@@ -922,11 +925,11 @@ extendの段階は、バックエンドのあと、`transformFiles` の前に実
 | TypeScriptとNodeの最低バージョン | TypeScript 5.8以降、Node 22以降 | 17章 |
 | 判別子を持つ親を、allOfで継承する子のunionにするか | しない。判別子は検証の結果を変えないので、判別するリテラルを付けるだけにする | 6.5 |
 | 3.0で `$ref` の兄弟として書かれた `nullable` | 仕様に従って無視し、警告する。兄弟を尊重する互換モードはない | 6.3 |
-| 導出した型名がほかの名前と衝突したとき | ほかの名前がそのまま使い、導出した名前は接尾辞の前に `Operation` を入れ、警告を出す（kubbにならう） | 6.6 |
+| 導出した型名がほかの名前と衝突したとき | ほかの名前がそのまま使い、導出した名前は接尾辞の前に `Operation` を入れ、警告を出す | 6.6 |
 | JSONの中でもマルチパートの本文としても使われ、バイナリのパートを持つ名前付きのスキーマ | 名前付きの型はJSONに従う（`string`）。マルチパートの本文はスキーマをインラインに展開し、バイナリのパートを `Blob \| File` にする | 6.4 |
 | ワイルドカードのメディアタイプの扱い | 実際のContent-Typeで解析し（`auto`）、型はありうる値のunionにする。設定でJSONとして扱える | 8.5 |
 | TypeScript以外の言語の生成 | 言語に依存しないセマンティックモデル、共有の命名、ローワリング、ランタイムの契約、言語ごとに1つのバックエンド。TypeScriptを最初に、Pythonを2番目にする | 18 |
-| 多言語の設計の未解決の問題（Q1〜Q7） | 18.16を参照 | 18.16 |
+| 多言語の設計の未解決の問題（Q1〜Q7） | 18.15を参照 | 18.15 |
 
 ## 17. 対応環境 {#17-supported-environments}
 
@@ -935,7 +938,7 @@ extendの段階は、バックエンドのあと、`transformFiles` の前に実
 | TypeScript | 5.8 | `erasableSyntaxOnly` が導入されたバージョン。開発には7.0.2を使い、CIでは両方で型検査する |
 | Node | 22 | Node 20のサポートは2026年4月に終了した。生成コードを型ストリッピングで直接実行するには22.18以降が必要 |
 | Rust（生成器のビルド） | 1.85 | edition 2024を使う |
-| Python（生成コードと `tsurara-client`） | 3.11 | 18.16、Q2 |
+| Python（生成コードと `tsurara-client`） | 3.11 | 18.15、Q2 |
 
 `@tsurara/client` は、`fetch`、`Request`、`Response`、`Headers`、`AbortController`、`URL`（コンストラクターだけ）を必要とする。`ReadableStream`、`Blob`、`FormData`、`URLSearchParams`、`AbortSignal.any`、`DOMException` はあれば使うので、React Nativeのようにその一部がない環境でもクライアントは動く。リクエスト、タイムアウト、中断はそれらなしで動き、React Nativeのファイルオブジェクト（`reactNativeFile` を通して渡す `{ uri, name, type }`）はファイルのパートとしてアップロードされる。ストリーミングのレスポンスには、ストリーミングの本文を扱える `fetch`（Expoでは `expo/fetch`）が必要で、なければ `parseAs: 'stream'` は `kind: 'parse'` を返す。Hermesについては、`runtimes/typescript/hermes`（`@tsurara/hermes-check`）が、Metroと同じくReact Native自身の `fetch`、`FormData`、`URL` のポリフィルとBabelのプリセットでクライアントをバンドルする。React Native 0.88の `hermesc` でコンパイルし、Hermes CLIの最後のリリース（v0.13.0、React Native 0.75の時期）のVMで、JSONの呼び出し、Basic認証、`reactNativeFile` を使うマルチパートのアップロード、タイムアウト、中断、そしてストリーミングの `fetch` がない場合のストリームの `parse` の失敗を実行する。React NativeとExpoは、まだ実機で確かめていない。
 
@@ -1008,7 +1011,7 @@ tsuraraは1つのOpenAPIの定義から多くの言語のコードを生成す�
 | `tsurara-cli` | `tsurara` コマンド。組み込みのすべての `tsurara-lang-<language>` クレートに依存し、`language` の値をバックエンドに対応づけるレジストリを持つ。そのため、これより下のクレートはどれも言語のクレートに依存しない |
 | `tsurara-testkit` | 言語ごとのチェッカー（18.12） |
 
-以前の `tsurara-codegen` クレートはなくなった。その解析は `tsurara-sem` に、`emit.rs` は `tsurara-lang-typescript` に移った。命名は `tsurara-naming` とTypeScriptバックエンドに移った。`ir.rs` はモデルの言語に依存しない型のIRで、`tsurara-lower` とすべてのバックエンドが使う。そのバリアントのうち `Undefined`、`Ref`、`External`、`Builtin` だけはTypeScriptのローワリングに属する（モデルには決して現れず、シリアライズもされない）。`print.rs`（TypeScriptの型の出力。正規化でも安定したメンバーの順序のために使う）と `options.rs`（共通のオプション）も `tsurara-sem` に残っている。043〜045でTypeScriptだけのオプションと命名を外に移し、これらを残した。
+以前の `tsurara-codegen` クレートはなくなった。その解析は `tsurara-sem` に、`emit.rs` は `tsurara-lang-typescript` に移った。命名は `tsurara-naming` とTypeScriptバックエンドに移った。`ir.rs` はモデルの言語に依存しない型のIRで、`tsurara-lower` とすべてのバックエンドが使う。そのバリアントのうち `Undefined`、`Ref`、`External`、`Builtin` だけはTypeScriptのローワリングに属する（モデルには決して現れず、シリアライズもされない）。`print.rs`（TypeScriptの型の出力。正規化でも安定したメンバーの順序のために使う）と `options.rs`（共通のオプション）も `tsurara-sem` に残っている。TypeScriptだけのオプションと命名は外に移った。
 
 ```rust
 pub trait Backend {
@@ -1422,34 +1425,7 @@ TypeScriptが最初である。共有のクレートの上に作り直し、基�
 
 Pythonは構造的なunionと多重継承を持つので、unionや継承のない言語（Go、Java、C#、GDScript）のためのフォールバックは試さない。そうした言語を追加するまでは、それらのパスは小さな能力の集合を使うローワリングのテストで確かめる。
 
-### 18.15 移行の計画 {#1815-migration-plan}
-
-リファクタリングの段階では、TypeScriptの出力をバイト単位で同一に保つ（既存のスナップショットはすべて変えない）。意図して出力を変える段階は、そう明記する。041は029に依存する。現在はJSONの中の `contentMediaType` の文字列が `Blob | File` になる（`table.yaml` がそれを期待している）からである。029はそれらのスナップショットを意図して変え、単独でレビューするので、041は残りを変えずに保てる。
-
-| Issue | 変更 | 依存先 |
-|---|---|---|
-| 036 | 未解決の問題を決める。この文書をdesign.mdにマージする | — |
-| 037 | クレートに分割する。`Backend` トレイトとレジストリ。TypeScriptを `tsurara-lang-typescript` に移す | 036 |
-| 038 | モデルの整数、数値、フォーマット | 037 |
-| 039 | 明示的なenumのノード | 037 |
-| 040 | 構造化した判別子。`allOf` の構造を保つ | 037 |
-| 041 | `Binary`、`BodyKind`、言語ごとの外部の型 | 037、016、029 |
-| 042 | `tsurara-naming`：コンテキスト、スコープ、`NamingPolicy`、ワイヤー上の名前。モデルは識別子を持たない | 038〜041、032 |
-| 043 | 意味上の警告とバックエンドの警告 | 042、015 |
-| 044 | 設定：`language`、言語のセクション、トップレベルのキーの削除 | 042、016 |
-| 045 | シリアライズでき、バージョンを持つセマンティックモデル | 042 |
-| 047 | ランタイムの契約：OperationDefのスキーマ、Resultの種類、ランタイムの能力、適合性テストのベクター。`@tsurara/client` を移す | 036 |
-| 048 | 希望する名前を持つ引き上げの候補 | 042 |
-| 049 | CLIでのバックエンドの目印とサイドカー | 037 |
-| 050 | 意味のケースのテスト、言語ごとの期待値、チェッカーの枠組み | 045 |
-| 051 | `tsurara-lower`：`tir`、能力、共有のパス、バリデーター | 048 |
-| 052 | TypeDefの形式、操作との結び付け、デコードとエンコードのベクター | 047、051 |
-| 053 | `tsurara-pretty`。TypeScriptのプリンターを移植する | 037 |
-| 054 | `describe` を持つ外部バックエンドのプロトコル | 045、044、049 |
-| 055 | Pythonバックエンド、型のみ | 043、044、049、050、051、052、053 |
-| 056 | `transformModel` フック | 045、017 |
-
-### 18.16 決定事項 {#1816-decisions}
+### 18.15 決定事項 {#1815-decisions}
 
 2026-11-10に決定した（以前の草稿の提案を採用した）。
 

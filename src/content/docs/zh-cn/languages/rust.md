@@ -1,7 +1,7 @@
 ---
 title: "Rust"
 sourcePath: docs/languages/rust.md
-sourceHash: f5fc7d1552f6
+sourceHash: 6f0956554b27
 ---
 
 Rust 后端（`language: rust`，crate `tsurara-lang-rust`）生成带有 serde derive 的 struct 和 enum，以及使用运行时 crate `tsurara-client`（`runtimes/rust`）的异步调用函数。本页说明映射关系。该后端是实验性的：`tsurara generate` 会这样提示，其输出可能会改变。
@@ -40,7 +40,7 @@ Rust 后端（`language: rust`，crate `tsurara-lang-rust`）生成带有 serde 
 | 可空属性 | `pub name: Option<T>`（`null` 为 `None`；也接受缺失的值，是更宽的类型） |
 | 可选且可空 | `#[serde(default, skip_serializing_if = "Nullable::is_missing")] pub name: tsurara_client::Nullable<T>`，一个由 `Missing`、`Null` 和 `Value(T)` 组成的 enum（Q3） |
 | `additionalProperties` | `#[serde(flatten)] pub additional_properties: BTreeMap<String, T>` |
-| 字符串枚举 | `pub enum Status { #[serde(rename = "available")] Available, ... }`；在接收值的位置还有 `#[serde(untagged)] Unknown(String)`，它保留未列出的值并原样写回 |
+| 字符串枚举 | `pub enum Status { #[serde(rename = "available")] Available, ... }`，定义中有 `x-enum-varnames` 或 `x-enumNames` 时变体名由它们生成；在接收值的位置还有 `#[serde(untagged)] Unknown(String)`，它保留未列出的值并原样写回 |
 | 整数或混合枚举 | `pub type Level = i64;` 以及 `pub const LEVEL_1: Level = 1;` |
 | 带判别字段的联合类型 | 使用 `tsurara_client::tagged_union!` 的 `pub enum Pet { Cat(Cat), Dog(Dog) }`，它读取判别字段并从整个对象解码成员（成员保留其标签字段）；未列出的值由 `defaultMapping` 成员接收，没有时在接收值的位置由 `Unknown(serde_json::Value)` 接收 |
 | 其他联合类型（`oneOf`、`anyOf`、类型数组） | `#[serde(untagged)] pub enum Id { Integer(i64), String(String) }`，按顺序尝试成员；变体名来自成员类型 |

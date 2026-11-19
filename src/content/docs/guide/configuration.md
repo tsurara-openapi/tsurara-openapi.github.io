@@ -1,7 +1,7 @@
 ---
 title: "Configuration"
 sourcePath: docs/guide/configuration.md
-sourceHash: c1fc416b2bd0
+sourceHash: 0b600e1cef10
 ---
 
 tsurara reads `tsurara.config.yaml` (or `.yml`, `.json`, `.toml`) from the current directory or the nearest parent, or the file given with `--config`. The npm package `tsurara` includes `schema/tsurara.config.schema.json`, which describes every key for editor completion:
@@ -48,12 +48,16 @@ typescript:
   importExtension: ts
   layout: split
   enumStyle: union
+  bodilessResponses: discard
   typeMappings:
     uuid: { type: "Brand<'Uuid'>", import: { from: ./brand.ts, name: Brand } }
   overrides:
     "#/components/schemas/Id": string
   naming:
     schemaCase: preserve
+    functionCase: preserve
+    typePrefix: Api
+    enumKeyCase: preserve
     overrides:
       "#/components/schemas/Error": ApiErrorBody
 ```
@@ -63,6 +67,7 @@ typescript:
 | `importExtension` | `js` | Extension of relative imports in generated code: `js` (for `tsc` builds and bundlers), `ts` (to run with Node type stripping; consumers need `allowImportingTsExtensions` or `rewriteRelativeImportExtensions`), or `none` (Metro, some bundlers) |
 | `layout` | `split` | `split`: one file per operation (`operations/getPet.ts`) and per schema (`schemas/Pet.ts`); `tags`: one file per tag; `single`: one file |
 | `enumStyle` | `union` | `union`: string literal unions; `const`: also an object keyed by the values (`Status.available`), with the type derived from it |
+| `bodilessResponses` | `discard` | What happens to the body of an error response (4xx, 5xx, a `default` next to success statuses) the definition gives no content: `discard` drops it and the error is `undefined`; `read` reads a body that arrives with a Content-Type, as `auto` does, and the error is `unknown`. Not for `HEAD` |
 | `aggregateMaps` | `false` | Also emit `paths.ts` and `operations.ts`, maps of every operation for generic clients |
 | `clientModule` | `@tsurara/client` | The module generated code imports the runtime from |
 | `mocks` | | `msw` or `fetch`: also emit mock factories (`mockPet()`, from the sample values of the definition) and one request handler per operation under `mocks/`, as MSW handlers or as routes for `mockFetch` of `@tsurara/client/testing` ([Mocks](../mocks/)). Nothing else imports them, and without the option nothing mentions `msw` |
@@ -73,6 +78,9 @@ typescript:
 | `typeMappings` | | A type per `format` (`uuid`, `date`, ...): a type expression, or `{ type, import: { from, name } }`. Paths in `from` that start with `.` are relative to this file. A mapping must not change what JSON parsing produces: `Date` for `date-time` and `bigint` for `int64` are errors |
 | `overrides` | | A type per JSON Pointer, in the same form as `typeMappings` |
 | `naming.schemaCase` | `preserve` | `preserve` keeps component names that are identifiers; `pascal` makes every type name PascalCase |
+| `naming.typePrefix` | | Put before the names of schema types: `Api` gives `ApiPet` (and `ApiPetWritable`). Types derived from operations (`GetPetResult`) and names fixed by `naming.overrides` keep their names |
+| `naming.enumKeyCase` | `preserve` | The keys of `enumStyle: const` objects: `preserve` writes the member names (`x-enum-varnames`, `x-enumNames`) or the values as they are; `constant` gives `PAYMENT_PENDING`, `pascal` `PaymentPending`, `camel` `paymentPending`. Keys that become equal are numbered (`A_B`, `A_B_2`) |
+| `naming.functionCase` | `preserve` | `preserve` keeps operation ids that are identifiers as function names (`ListPets`, `get_pet`); `camel` makes every function name camelCase (`listPets`, `getPet`) |
 | `naming.overrides` | | Final TypeScript identifiers per JSON Pointer, used as they are |
 
 Types in `typeMappings`, `overrides` and `x-tsurara-type` must be type expressions (names, type arguments, arrays, `|`, `&`, literals); anything else is an error in the configuration and ignored with a warning in a definition.

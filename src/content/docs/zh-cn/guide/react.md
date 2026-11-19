@@ -4,7 +4,7 @@ sourcePath: docs/guide/react.md
 sourceHash: 09418daf7502
 ---
 
-本页逐步讲解 [`examples/react-tanstack`](https://github.com/tsurara-openapi/tsurara/tree/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/examples/react-tanstack)：一个基于卡片 API 的小型 Next.js 应用（App Router），包含按页读取的搜索列表、详情页、编辑表单、两个租户、使用 MSW 的测试以及服务端渲染。所有与 API 通信的部分都是生成的代码和 `@tsurara/client`；应用本身没有编写任何查询键、`queryFn` 或类型断言。
+本页逐步讲解 [`examples/react-tanstack`](https://github.com/tsurara-openapi/tsurara/tree/170cabec56cf573944620f7d2ef05eb2b845d2bb/examples/react-tanstack)：一个基于卡片 API 的小型 Next.js 应用（App Router），包含按页读取的搜索列表、详情页、编辑表单、两个租户、使用 MSW 的测试以及服务端渲染。所有与 API 通信的部分都是生成的代码和 `@tsurara/client`；应用本身没有编写任何查询键、`queryFn` 或类型断言。
 
 ## 开始 {#start}
 

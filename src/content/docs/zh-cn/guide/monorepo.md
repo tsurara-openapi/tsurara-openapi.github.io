@@ -4,7 +4,7 @@ sourcePath: docs/guide/monorepo.md
 sourceHash: a0a97640b239
 ---
 
-只在一个共享包中生成一次，让每个应用导入它。[examples/pnpm-monorepo](https://github.com/tsurara-openapi/tsurara/tree/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/examples/pnpm-monorepo) 是一个可运行的示例，在 CI 中进行测试：一个 Vite 应用和一个 Node 应用共享 `@acme/openapi`。
+只在一个共享包中生成一次，让每个应用导入它。[examples/pnpm-monorepo](https://github.com/tsurara-openapi/tsurara/tree/170cabec56cf573944620f7d2ef05eb2b845d2bb/examples/pnpm-monorepo) 是一个可运行的示例，在 CI 中进行测试：一个 Vite 应用和一个 Node 应用共享 `@acme/openapi`。
 
 ```
 packages/openapi/                 @acme/openapi

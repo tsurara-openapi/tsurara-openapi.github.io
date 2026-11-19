@@ -1,7 +1,7 @@
 ---
 title: "設定"
 sourcePath: docs/guide/configuration.md
-sourceHash: c1fc416b2bd0
+sourceHash: 0b600e1cef10
 ---
 
 tsuraraは、カレントディレクトリか最も近い親ディレクトリにある `tsurara.config.yaml`（または `.yml`、`.json`、`.toml`）を読みます。`--config` でファイルを指定することもできます。npmパッケージ `tsurara` には、すべてのキーを記述した `schema/tsurara.config.schema.json` が入っていて、エディタの補完に使えます。
@@ -48,12 +48,16 @@ typescript:
   importExtension: ts
   layout: split
   enumStyle: union
+  bodilessResponses: discard
   typeMappings:
     uuid: { type: "Brand<'Uuid'>", import: { from: ./brand.ts, name: Brand } }
   overrides:
     "#/components/schemas/Id": string
   naming:
     schemaCase: preserve
+    functionCase: preserve
+    typePrefix: Api
+    enumKeyCase: preserve
     overrides:
       "#/components/schemas/Error": ApiErrorBody
 ```
@@ -63,6 +67,7 @@ typescript:
 | `importExtension` | `js` | 生成コードの相対importの拡張子。`js`（`tsc` でのビルドやバンドラー向け）、`ts`（Nodeの型ストリッピングで実行する場合。利用側に `allowImportingTsExtensions` か `rewriteRelativeImportExtensions` が必要）、`none`（Metroや一部のバンドラー向け） |
 | `layout` | `split` | `split`：操作ごと（`operations/getPet.ts`）とスキーマごと（`schemas/Pet.ts`）に1ファイル。`tags`：タグごとに1ファイル。`single`：1ファイル |
 | `enumStyle` | `union` | `union`：文字列リテラルのunion。`const`：値をキーにしたオブジェクト（`Status.available`）も出力し、型はそのオブジェクトから導きます |
+| `bodilessResponses` | `discard` | 定義に内容がないエラーの応答（4xx、5xx、成功のステータスと並ぶ `default`）の本文をどうするか。`discard` は捨て、エラーは `undefined` になります。`read` はContent-Type付きで届いた本文を `auto` と同じように読み、エラーは `unknown` になります。`HEAD` は対象外です |
 | `aggregateMaps` | `false` | 汎用のクライアント向けに、すべての操作をまとめたマップ `paths.ts` と `operations.ts` も出力します |
 | `clientModule` | `@tsurara/client` | 生成コードがランタイムをimportするモジュール |
 | `mocks` | | `msw` または `fetch`。モックのファクトリ（`mockPet()`。定義のサンプル値から作ります）と、操作ごとのリクエストハンドラーを `mocks/` に出力します。ハンドラーはMSWのハンドラーか、`@tsurara/client/testing` の `mockFetch` のルートです（[モック](../mocks/)）。ほかのファイルはこれらをimportしません。このオプションがなければ、どのファイルも `msw` に触れません |
@@ -73,6 +78,9 @@ typescript:
 | `typeMappings` | | `format`（`uuid`、`date` など）ごとの型。型の式か、`{ type, import: { from, name } }` で書きます。`from` のパスが `.` で始まるときは、このファイルからの相対パスです。JSONの解析結果を変えるマッピングは書けません。`date-time` に `Date`、`int64` に `bigint` を指定するとエラーになります |
 | `overrides` | | JSON Pointerごとの型。書き方は `typeMappings` と同じです |
 | `naming.schemaCase` | `preserve` | `preserve` は識別子として使えるコンポーネント名をそのまま使います。`pascal` はすべての型名をPascalCaseにします |
+| `naming.typePrefix` | | スキーマの型の名前の前に付けます。`Api` なら `ApiPet`（と `ApiPetWritable`）になります。操作から導いた型（`GetPetResult`）と、`naming.overrides` で固定した名前はそのままです |
+| `naming.enumKeyCase` | `preserve` | `enumStyle: const` のオブジェクトのキー。`preserve` はメンバー名（`x-enum-varnames`、`x-enumNames`）か値をそのまま書きます。`constant` は `PAYMENT_PENDING`、`pascal` は `PaymentPending`、`camel` は `paymentPending` にします。同じになったキーには番号を付けます（`A_B`、`A_B_2`） |
+| `naming.functionCase` | `preserve` | `preserve` は識別子として使える操作IDをそのまま関数名にします（`ListPets`、`get_pet`）。`camel` はすべての関数名をcamelCaseにします（`listPets`、`getPet`） |
 | `naming.overrides` | | JSON PointerごとのTypeScriptの最終的な識別子。そのまま使われます |
 
 `typeMappings`、`overrides`、`x-tsurara-type` の型は、型の式（名前、型引数、配列、`|`、`&`、リテラル）でなければなりません。それ以外を書くと、設定ではエラーに、定義では警告を出して無視されます。

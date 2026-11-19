@@ -12,6 +12,6 @@ sourceHash: 2712fc267038
 | `tsurara mcp` | 面向编程智能体的 MCP 服务器（[指南](../ai/)） |
 | `tsurara inspect operations` / `operation <id>` / `schema <name>` / `warning <code>` | 在不写入文件的情况下，查询操作、生成的函数及调用示例、schema 生成的类型，或某个警告的含义 |
 
-`generate` 和 `check` 接受 `--format json`，供脚本和编程智能体使用（[spec/cli-output.schema.json](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/spec/cli-output.schema.json)）；`inspect` 接受 `--format json|text` 和 `--target`。
+`generate` 和 `check` 接受 `--format json`，供脚本和编程智能体使用（[spec/cli-output.schema.json](https://github.com/tsurara-openapi/tsurara/blob/170cabec56cf573944620f7d2ef05eb2b845d2bb/spec/cli-output.schema.json)）；`inspect` 接受 `--format json|text` 和 `--target`。
 
 `generate` 只写入内容发生变化的文件，并删除输出目录中以 tsurara 生成文件标记开头的过时文件。

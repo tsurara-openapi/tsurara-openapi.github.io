@@ -1,7 +1,7 @@
 ---
 title: "类型"
 sourcePath: docs/guide/types.md
-sourceHash: ab8eb494164b
+sourceHash: 7a7d7e6677c5
 ---
 
 本页说明 schema 如何变成 TypeScript 类型。规则是固定的，表中的每一行都是一个测试（design.md 6.4）；Python 有自己的表，见 [docs/languages/python.md](../../languages/python/)。
@@ -10,7 +10,7 @@ sourceHash: ab8eb494164b
 |---|---|
 | `type: string`、`integer`、`number`、`boolean`、`null` | `string`、`number`、`number`、`boolean`、`null` |
 | `format: date-time`、`uuid`、`int64` 等 | 基础类型（`string`、`number`）；格式写在 JSDoc 中。`typeMappings` 可以指定 JSON 解析结果所对应的其他类型（例如带品牌的字符串） |
-| `enum` | 字面量的联合类型（`'a' \| 'b'`）；`enumStyle: const` 会额外生成一个包含这些值的对象 |
+| `enum` | 字面量的联合类型（`'a' \| 'b'`）；`enumStyle: const` 会额外生成一个包含这些值的对象；定义中有 `x-enum-varnames` 或 `x-enumNames` 时，用它们作为对象的键，键的写法遵循 `naming.enumKeyCase` |
 | `const` | 字面量类型 |
 | `nullable: true`（3.0）、`type: [string, "null"]`（3.1） | `string \| null` |
 | 带 `properties` 的 `type: object` | 对象类型；不在 `required` 中的属性是可选的（`a?: T`） |

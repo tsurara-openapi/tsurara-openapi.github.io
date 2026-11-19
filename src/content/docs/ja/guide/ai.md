@@ -50,7 +50,7 @@ tsuraraのリポジトリはClaude Codeのプラグイン（`.claude-plugin/plug
 
 `tsurara init --agents` は、同じルールを短くまとめて `AGENTS.md`（プロジェクトに `CLAUDE.md` しかなければそちら）の `<!-- tsurara:start -->` と `<!-- tsurara:end -->` の間に書き込みます。もう一度実行すると、その部分を置き換えます。
 
-[llms.txt](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/llms.txt)は言語モデル向けのドキュメントの索引で、[llms-full.txt](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/llms-full.txt)にはそのすべてが1つのファイルに入っています。
+[llms.txt](https://github.com/tsurara-openapi/tsurara/blob/170cabec56cf573944620f7d2ef05eb2b845d2bb/llms.txt)は言語モデル向けのドキュメントの索引で、[llms-full.txt](https://github.com/tsurara-openapi/tsurara/blob/170cabec56cf573944620f7d2ef05eb2b845d2bb/llms-full.txt)にはそのすべてが1つのファイルに入っています。
 
 ## CLI {#the-cli}
 
@@ -65,7 +65,7 @@ tsurara generate --format json
 tsurara check --format json
 ```
 
-設定に複数のターゲットがあるときは `--target` が必要です。`generate` と `check` のJSONは[spec/cli-output.schema.json](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/spec/cli-output.schema.json)に従います。
+設定に複数のターゲットがあるときは `--target` が必要です。`generate` と `check` のJSONは[spec/cli-output.schema.json](https://github.com/tsurara-openapi/tsurara/blob/170cabec56cf573944620f7d2ef05eb2b845d2bb/spec/cli-output.schema.json)に従います。
 
 ## 呼び出し例 {#call-examples}
 

@@ -1,10 +1,10 @@
 ---
 title: "客户端"
 sourcePath: docs/guide/client.md
-sourceHash: ae5607fe4635
+sourceHash: 8df1bf09c92e
 ---
 
-生成的函数以客户端作为第一个参数。本页介绍 TypeScript 的 `@tsurara/client`；Python 运行时 `tsurara-client` 采用相同的模型（[其 README](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/runtimes/python/README.md)）。
+生成的函数以客户端作为第一个参数。本页介绍 TypeScript 的 `@tsurara/client`；Python 运行时 `tsurara-client` 采用相同的模型（[其 README](https://github.com/tsurara-openapi/tsurara/blob/170cabec56cf573944620f7d2ef05eb2b845d2bb/runtimes/python/README.md)）。
 
 ```ts
 import { createClient, retry } from '@tsurara/client';
@@ -28,7 +28,7 @@ export const api = createClient<{ requestId?: string }>({
 |---|---|---|
 | `success` | `true` | 定义中的成功状态码；`data` 具有对应的类型 |
 | `http` | `false` | 错误状态码，或定义中未声明的状态码（`documented: false`、`error: unknown`） |
-| `network` | `false` | `fetch` 失败（DNS、连接、CORS） |
+| `network` | `false` | `fetch` 失败（DNS、连接、CORS），或在读取响应体时连接失败 |
 | `timeout` | `false` | 超过了 `timeout` |
 | `aborted` | `false` | 调用方的 `signal` 中止了请求 |
 | `parse` | `false` | 响应体与定义不符（Content-Type、JSON） |
@@ -40,6 +40,12 @@ if (r.ok) render(r.data);
 else if (isHttpError(r, 404)) showNotFound(r.error); // 定义中声明的 404 响应体
 else report(r);
 ```
+
+当 `network`、`timeout` 或 `aborted` 中断了响应体的读取时，Result 会保留 `response`，因此仍能知道状态码和响应头（`r.response?.status`）；没有 `response` 时，失败发生在响应到达之前。
+
+文本响应体（`text/*` 等）按 Content-Type 的 `charset` 解码，没有 `charset` 时为 UTF-8；平台的 `TextDecoder` 不认识的 `charset` 会成为 `parse` 失败。即使是文本媒体类型，只要 schema 是二进制（`type: string, format: binary`），就会读取为 `Blob`，保留到达时的字节。
+
+定义中没有内容的错误响应的 `error` 为 `undefined`，其响应体会被丢弃。设置 `typescript.bodilessResponses: read` 后，带有 Content-Type 到达的响应体仍会被读取（按其类型读作 JSON、文本或 `Blob`），`error` 为 `unknown`，这样就不会丢失定义遗漏的消息。
 
 只检查 `r.status === 404` 并不能收窄 `r.error` 的类型，因为未声明状态码的成员带有 `status: number`；`isHttpError` 还会检查 `documented`。
 
@@ -284,7 +290,33 @@ export const queryClient = new QueryClient({
 
 ## 单次调用的选项 {#per-call-options}
 
-`signal`、`headers`、`timeout`、`baseUrl`、`context`、`validate` 和 `contentType`（用于有多种请求媒体类型的操作）可以按调用指定。
+`signal`、`headers`、`timeout`、`baseUrl`、`context`、`validate`、`fetchOptions` 和 `contentType`（用于有多种请求媒体类型的操作）可以按调用指定。
+
+`fetchOptions` 是 `fetch` 本身的选项，例如 `cache`、`credentials`、`keepalive` 或 Next.js 的 `next`；客户端也可以设置，单次调用的选项会覆盖在客户端的选项之上。方法、请求头、请求体、signal 和重定向的处理仍由客户端决定。中间件可以通过 `req.fetchOptions` 看到并替换它们。
+
+```ts
+await getPet(api, {
+  path: { petId: 1 },
+  fetchOptions: { cache: 'force-cache', next: { revalidate: 60, tags: ['pet'] } },
+});
+```
+
+## 原始响应 {#the-raw-response}
+
+`api.requestRaw(def, data)` 会像生成的函数一样发送调用（经过客户端的请求头、认证和中间件），但返回尚未读取响应体的响应，用于直接转发响应（大文件下载），或以定义未描述的方式读取。操作由生成的 `{operation}Def` 描述：
+
+```ts
+import { exportOrdersDef, type ExportOrdersData } from './api/operations/exportOrders.js';
+
+const r = await api.requestRaw(exportOrdersDef, { query: { status: 'shipped' } } satisfies ExportOrdersData);
+if (r.kind === 'response' && r.ok) return new Response(r.response.body, { headers: r.response.headers });
+```
+
+Result 是 `{ kind: 'response', ok, status, documented, response }`，或传输失败；`ok` 和 `documented` 的判定与普通调用相同。`timeout` 只覆盖到响应到达为止；`signal` 仍可取消响应体的读取。不会调用 `onResult` 和 `onUndocumentedStatus`。
+
+## multipart 与查询参数的值 {#multipart-and-query-values}
+
+multipart 的各部分遵循定义中的 `encoding`。`encoding` 中没有 Content-Type 的对象会作为以其 JSON 文本为值的字段发送；有 Content-Type 时，则作为该类型的部分发送，而 `FormData` 只能把它作为文件（带文件名）发送。值为 `null` 的查询参数，以及 `in: querystring` 对象中值为 `null` 的成员，与缺失的值一样不发送。
 
 ## 内置运行时 {#a-vendored-runtime}
 
@@ -300,7 +332,7 @@ runtime: vendor
 |---|---|---|
 | TypeScript | `_runtime/` | 生成的文件以相对路径导入它；从 `./api/_runtime/index.js` 导入 `createClient` |
 | Python | `_runtime/` | `from api._runtime import Client`。请把 httpx 加入你的依赖 |
-| Rust | `runtime/` | 将 `rust.runtimeCrate` 设为该模块的路径（`crate::api::runtime`），并添加 `mod.rs` 中列出的 crate（serde、serde_json、indexmap；有操作时还需要 tokio、fastrand、httpdate 和 reqwest） |
+| Rust | `runtime/` | 将 `rust.runtimeCrate` 设为该模块的路径（`crate::api::runtime`），并添加 `mod.rs` 中列出的 crate（serde、serde_json、indexmap；有操作时还需要 tokio、fastrand、httpdate、encoding_rs 和 reqwest） |
 | Go | `internal/tsurara/` | 导入路径来自你的 `go.mod` |
 
 副本会与代码一起重新生成：它带有生成文件标记，`tsurara check` 会报告对它的修改，并且它始终与生成器的版本一致（不存在需要检查的运行时版本）。`generate` 会打印需要添加的第三方依赖。

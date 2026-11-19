@@ -1,7 +1,7 @@
 ---
 title: "型"
 sourcePath: docs/guide/types.md
-sourceHash: ab8eb494164b
+sourceHash: 7a7d7e6677c5
 ---
 
 スキーマがTypeScriptの型になる規則です。規則は固定されていて、表の各行がテストになっています（design.md 6.4）。Pythonの表は[docs/languages/python.md](../../languages/python/)にあります。
@@ -10,7 +10,7 @@ sourceHash: ab8eb494164b
 |---|---|
 | `type: string`、`integer`、`number`、`boolean`、`null` | `string`、`number`、`number`、`boolean`、`null` |
 | `format: date-time`、`uuid`、`int64` など | 基本の型（`string`、`number`）。フォーマットはJSDocに書かれます。`typeMappings` では、JSONの解析結果と同じ値を表す別の型（ブランド付きの文字列など）を指定できます |
-| `enum` | リテラルのunion（`'a' \| 'b'`）。`enumStyle: const` にすると、値のオブジェクトも出力します |
+| `enum` | リテラルのunion（`'a' \| 'b'`）。`enumStyle: const` にすると、値のオブジェクトも出力します。定義に `x-enum-varnames` か `x-enumNames` があれば、そのキーに使います。キーは `naming.enumKeyCase` の形で書きます |
 | `const` | リテラル型 |
 | `nullable: true`（3.0）、`type: [string, "null"]`（3.1） | `string \| null` |
 | `properties` のある `type: object` | オブジェクト型。`required` にないプロパティは省略可能になります（`a?: T`） |

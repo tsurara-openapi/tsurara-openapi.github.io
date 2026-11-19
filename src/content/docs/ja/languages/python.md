@@ -1,12 +1,12 @@
 ---
 title: "Python"
 sourcePath: docs/languages/python.md
-sourceHash: 4b9a4fa99df1
+sourceHash: 5b0949ae2dbb
 ---
 
 Pythonバックエンド（`language: python`、クレート `tsurara-lang-python`）は、dataclass、enum、型エイリアスを生成し、JSONを汎用的に変換するランタイム向けのTypeDefを付けます（design.md 18.7）。生成コードはランタイム `tsurara-client`（`runtimes/python`）を使います。ランタイムはhttpxの上の同期と非同期のクライアント、Result、TypeDefのコーデックを持ち、`spec/` の適合性テストのベクターを通ります。操作ごとに呼び出し関数が1つ生成されます。
 
-生成コードはPython 3.11以降を必要とし（design.md 18.16、Q2）、Python 3.11としてpyrightで検査しています。
+生成コードはPython 3.11以降を必要とし（design.md 18.15、Q2）、Python 3.11としてpyrightで検査しています。
 
 ## クイックスタート {#quick-start}
 
@@ -63,7 +63,7 @@ with Client("https://petstore3.swagger.io/api/v3") as client:
 | nullを許すプロパティ | `name: T \| None` |
 | 省略可能かつnullを許す | `name: T \| None \| Missing = MISSING`（`_support.py`）。値がないことと `null` を区別するのはここだけです（Q3） |
 | `additionalProperties` | `additional_properties: dict[str, T] = field(default_factory=dict)` |
-| enum | `class Status(Enum)`。メンバーの名前は値から作ります（`IT_S`、`VALUE_1`）。値を受け取る箇所では、型注釈は `Status \| str`（または `\| int`）です |
+| enum | `class Status(Enum)`。メンバーの名前は値から作ります（`IT_S`、`VALUE_1`）。定義に `x-enum-varnames` か `x-enumNames` があれば、そこから作ります。値を受け取る箇所では、型注釈は `Status \| str`（または `\| int`）です |
 | 開いたタグ付きunion | 値を受け取る箇所では `Cat \| Dog \| dict[str, Any]`。挙がっていない判別子の値なら、JSONオブジェクトのまま保持します |
 | `additionalProperties` だけのオブジェクト | `dict[str, T]` |
 | `oneOf`、`anyOf`、型の配列 | `Name: TypeAlias = "A \| B"` |

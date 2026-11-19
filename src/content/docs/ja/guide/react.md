@@ -4,7 +4,7 @@ sourcePath: docs/guide/react.md
 sourceHash: 09418daf7502
 ---
 
-[`examples/react-tanstack`](https://github.com/tsurara-openapi/tsurara/tree/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/examples/react-tanstack)を順に見ていきます。カードのAPIを使う小さなNext.jsのアプリ（App Router）で、ページ単位で読み込む検索結果の一覧、詳細ページ、編集フォーム、2つのテナント、MSWを使うテスト、サーバーレンダリングがあります。APIとやりとりする部分はすべて生成コードと `@tsurara/client` で、アプリはクエリキーも `queryFn` も型アサーションも書いていません。
+[`examples/react-tanstack`](https://github.com/tsurara-openapi/tsurara/tree/170cabec56cf573944620f7d2ef05eb2b845d2bb/examples/react-tanstack)を順に見ていきます。カードのAPIを使う小さなNext.jsのアプリ（App Router）で、ページ単位で読み込む検索結果の一覧、詳細ページ、編集フォーム、2つのテナント、MSWを使うテスト、サーバーレンダリングがあります。APIとやりとりする部分はすべて生成コードと `@tsurara/client` で、アプリはクエリキーも `queryFn` も型アサーションも書いていません。
 
 ## 始める {#start}
 

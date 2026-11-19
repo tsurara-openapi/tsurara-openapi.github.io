@@ -1,7 +1,7 @@
 ---
 title: "バックエンドを書く"
 sourcePath: docs/guide/backends.md
-sourceHash: 5ad620817d3f
+sourceHash: 0465f5bb3b6f
 ---
 
 バックエンドは1つの言語のコードを生成します。tsuraraに同梱されているバックエンドはtsuraraのリポジトリにあります。ほかの言語のバックエンドは独自のリポジトリに置き、tsuraraが起動するプログラムとして動かせます。このガイドでは、空のリポジトリから始めて、`tsurara test-backend` を通るバックエンドと、適合性テストのベクターを通るランタイムを作ります。必要なのは `tsurara` のバイナリだけです。
@@ -116,7 +116,7 @@ jobs:
   test:
     steps:
       - uses: actions/checkout@v5
-      - run: npm install --global tsurara@0.1.0   # 対応するバージョンの `tsurara` バイナリ
+      - run: npm install --global tsurara@0.1.2   # 対応するバージョンの `tsurara` バイナリ
       - run: tsurara test-backend --backend 'node backend/backend.mjs' --check 'node backend/check.mjs'
       - run: npm test --prefix runtime
 ```

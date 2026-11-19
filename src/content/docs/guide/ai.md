@@ -50,7 +50,7 @@ Clients that read the same `mcpServers` format (Cursor's `.cursor/mcp.json`, Win
 
 `tsurara init --agents` writes the same rules, briefly, into `AGENTS.md` (or `CLAUDE.md` when the project only has that), between `<!-- tsurara:start -->` and `<!-- tsurara:end -->`; running it again replaces that section.
 
-[llms.txt](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/llms.txt) indexes the documentation for language models, and [llms-full.txt](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/llms-full.txt) holds all of it in one file.
+[llms.txt](https://github.com/tsurara-openapi/tsurara/blob/170cabec56cf573944620f7d2ef05eb2b845d2bb/llms.txt) indexes the documentation for language models, and [llms-full.txt](https://github.com/tsurara-openapi/tsurara/blob/170cabec56cf573944620f7d2ef05eb2b845d2bb/llms-full.txt) holds all of it in one file.
 
 ## The CLI
 
@@ -65,7 +65,7 @@ tsurara generate --format json
 tsurara check --format json
 ```
 
-`--target` is required when the configuration has several targets. The JSON of `generate` and `check` follows [spec/cli-output.schema.json](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/spec/cli-output.schema.json).
+`--target` is required when the configuration has several targets. The JSON of `generate` and `check` follows [spec/cli-output.schema.json](https://github.com/tsurara-openapi/tsurara/blob/170cabec56cf573944620f7d2ef05eb2b845d2bb/spec/cli-output.schema.json).
 
 ## Call examples
 

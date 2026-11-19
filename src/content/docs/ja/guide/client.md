@@ -1,10 +1,10 @@
 ---
 title: "クライアント"
 sourcePath: docs/guide/client.md
-sourceHash: ae5607fe4635
+sourceHash: 8df1bf09c92e
 ---
 
-生成された関数は、第1引数にクライアントを受け取ります。このページではTypeScriptの `@tsurara/client` を説明します。Pythonのランタイム `tsurara-client` も同じ仕組みです（[そのREADME](https://github.com/tsurara-openapi/tsurara/blob/7c43bb18c3cbc4d44d58c4d5517b666325d04f97/runtimes/python/README.md)）。
+生成された関数は、第1引数にクライアントを受け取ります。このページではTypeScriptの `@tsurara/client` を説明します。Pythonのランタイム `tsurara-client` も同じ仕組みです（[そのREADME](https://github.com/tsurara-openapi/tsurara/blob/170cabec56cf573944620f7d2ef05eb2b845d2bb/runtimes/python/README.md)）。
 
 ```ts
 import { createClient, retry } from '@tsurara/client';
@@ -28,7 +28,7 @@ export const api = createClient<{ requestId?: string }>({
 |---|---|---|
 | `success` | `true` | 定義にある成功のステータス。`data` はその型を持ちます |
 | `http` | `false` | エラーのステータス、または定義にないステータス（`documented: false`、`error: unknown`） |
-| `network` | `false` | `fetch` が失敗した（DNS、接続、CORS） |
+| `network` | `false` | `fetch` が失敗した（DNS、接続、CORS）、または本文を読んでいる間に接続が失敗した |
 | `timeout` | `false` | `timeout` を過ぎた |
 | `aborted` | `false` | 呼び出し側の `signal` で中断された |
 | `parse` | `false` | 本文が定義と合わない（Content-Type、JSON） |
@@ -40,6 +40,12 @@ if (r.ok) render(r.data);
 else if (isHttpError(r, 404)) showNotFound(r.error); // 定義にある404の本文
 else report(r);
 ```
+
+`network`、`timeout`、`aborted` が本文の読み込みを終わらせたときは、Resultが `response` を持ち続けるので、ステータスとヘッダーはわかります（`r.response?.status`）。`response` がなければ、応答が届く前の失敗です。
+
+テキストの本文（`text/*` など）は、Content-Typeの `charset` で読みます。`charset` がなければUTF-8です。プラットフォームの `TextDecoder` が知らない `charset` は `parse` の失敗になります。テキストのメディアタイプでもスキーマがバイナリ（`type: string, format: binary`）なら、届いたままのバイトを持つ `Blob` として読みます。
+
+定義に内容がないエラーの応答は `error: undefined` になり、本文は捨てます。`typescript.bodilessResponses: read` にすると、Content-Type付きで届いた本文を（その型に応じてJSON、テキスト、`Blob` として）読み、`error` は `unknown` になります。定義が書き漏らしたメッセージを失わずに済みます。
 
 `r.status === 404` だけを確かめても `r.error` の型は絞り込まれません。定義にないステータスのメンバーが `status: number` を持つからです。`isHttpError` は `documented` も確かめます。
 
@@ -284,7 +290,33 @@ export const queryClient = new QueryClient({
 
 ## 呼び出しごとのオプション {#per-call-options}
 
-`signal`、`headers`、`timeout`、`baseUrl`、`context`、`validate`、`contentType`（リクエストのメディアタイプが複数ある操作向け）は、呼び出しごとに指定できます。
+`signal`、`headers`、`timeout`、`baseUrl`、`context`、`validate`、`fetchOptions`、`contentType`（リクエストのメディアタイプが複数ある操作向け）は、呼び出しごとに指定できます。
+
+`fetchOptions` は `fetch` そのもののオプションで、`cache`、`credentials`、`keepalive`、Next.jsの `next` などです。クライアントにも指定でき、呼び出しのものがクライアントのものの上に重なります。メソッド、ヘッダー、本文、シグナル、リダイレクトの扱いはクライアントが決めます。ミドルウェアからは `req.fetchOptions` として見え、置き換えることもできます。
+
+```ts
+await getPet(api, {
+  path: { petId: 1 },
+  fetchOptions: { cache: 'force-cache', next: { revalidate: 60, tags: ['pet'] } },
+});
+```
+
+## 生の応答 {#the-raw-response}
+
+`api.requestRaw(def, data)` は、生成された関数と同じように（クライアントのヘッダー、認証、ミドルウェアを通して）呼び出しを送りますが、本文を読まないまま応答を返します。応答をそのまま流す場合（大きなダウンロード）や、定義に書かれていない方法で読む場合に使います。操作は生成された `{operation}Def` で指定します。
+
+```ts
+import { exportOrdersDef, type ExportOrdersData } from './api/operations/exportOrders.js';
+
+const r = await api.requestRaw(exportOrdersDef, { query: { status: 'shipped' } } satisfies ExportOrdersData);
+if (r.kind === 'response' && r.ok) return new Response(r.response.body, { headers: r.response.headers });
+```
+
+Resultは `{ kind: 'response', ok, status, documented, response }` か、トランスポートの失敗です。`ok` と `documented` は通常の呼び出しと同じように決まります。`timeout` は応答が届くまでの呼び出しに効き、`signal` は本文の読み込みも取り消せます。`onResult` と `onUndocumentedStatus` は呼ばれません。
+
+## マルチパートとクエリの値 {#multipart-and-query-values}
+
+マルチパートのパートは定義の `encoding` に従います。`encoding` にContent-Typeがないオブジェクトは、JSONのテキストを値とするフィールドとして送ります。Content-Typeがあれば、その型のパートとして送ります。`FormData` ではこれをファイル（ファイル名付き）としてしか送れません。値が `null` のクエリパラメーターと、`in: querystring` のオブジェクトのメンバーは、値がない場合と同じく送りません。
 
 ## ランタイムを同梱する {#a-vendored-runtime}
 
@@ -300,7 +332,7 @@ runtime: vendor
 |---|---|---|
 | TypeScript | `_runtime/` | 生成ファイルは相対パスでimportします。`createClient` は `./api/_runtime/index.js` からimportします |
 | Python | `_runtime/` | `from api._runtime import Client`。依存関係にhttpxを追加してください |
-| Rust | `runtime/` | `rust.runtimeCrate` にモジュールのパス（`crate::api::runtime`）を指定し、`mod.rs` に挙がっているクレート（serde、serde_json、indexmap。操作があればtokio、fastrand、httpdate、reqwestも）を追加してください |
+| Rust | `runtime/` | `rust.runtimeCrate` にモジュールのパス（`crate::api::runtime`）を指定し、`mod.rs` に挙がっているクレート（serde、serde_json、indexmap。操作があればtokio、fastrand、httpdate、encoding_rs、reqwestも）を追加してください |
 | Go | `internal/tsurara/` | importパスは `go.mod` から決まります |
 
 コピーはコードと一緒に再生成されます。生成ファイルの目印が付いていて、`tsurara check` はコピーへの編集を報告します。コピーは常に生成器のバージョンと一致します（確かめるべきランタイムのバージョンがありません）。`generate` は追加すべきサードパーティの依存関係を表示します。

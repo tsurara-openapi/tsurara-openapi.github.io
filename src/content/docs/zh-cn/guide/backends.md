@@ -1,7 +1,7 @@
 ---
 title: "编写后端"
 sourcePath: docs/guide/backends.md
-sourceHash: 5ad620817d3f
+sourceHash: 0465f5bb3b6f
 ---
 
 后端为一种语言生成代码。随 tsurara 提供的后端位于它的仓库中；其他语言的后端可以放在自己的仓库中，作为由 tsurara 启动的程序运行。本指南从一个空仓库开始，最终得到一个能通过 `tsurara test-backend` 的后端，以及一个能通过一致性测试向量的运行时。你只需要 `tsurara` 二进制文件。
@@ -116,7 +116,7 @@ jobs:
   test:
     steps:
       - uses: actions/checkout@v5
-      - run: npm install --global tsurara@0.1.0   # 你所支持版本的 `tsurara` 二进制文件
+      - run: npm install --global tsurara@0.1.2   # 你所支持版本的 `tsurara` 二进制文件
       - run: tsurara test-backend --backend 'node backend/backend.mjs' --check 'node backend/check.mjs'
       - run: npm test --prefix runtime
 ```
