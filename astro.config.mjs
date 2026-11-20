@@ -3,8 +3,9 @@ import starlight from '@astrojs/starlight';
 import { defineConfig } from 'astro/config';
 import { satteri } from '@astrojs/markdown-satteri';
 
-// GitHub Pages: the deploy workflow sets these from actions/configure-pages.
-const site = process.env.SITE_ORIGIN ?? 'https://tsurara-openapi.github.io';
+// GitHub Pages: the deploy workflow sets these from actions/configure-pages. In pull requests
+// that step does not run and the variables are empty strings, so empty means unset.
+const site = process.env.SITE_ORIGIN || 'https://tsurara-openapi.github.io';
 const base = process.env.SITE_BASE_PATH || '/';
 
 export default defineConfig({
