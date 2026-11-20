@@ -15,8 +15,8 @@
     "translations": "node scripts/check-translations.mjs"
   },
   "dependencies": {
-    "@astrojs/markdown-satteri": "0.4.6",
-    "@astrojs/starlight": "0.42.9",
-    "astro": "7.4.5"
+    "@astrojs/markdown-satteri": "0.4.9",
+    "@astrojs/starlight": "0.42.11",
+    "astro": "7.4.11"
   }
 }
